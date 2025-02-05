@@ -38,6 +38,7 @@ from hummingbot.remote_iface.messages import (
     ConfigCommandMessage,
     ExternalEventMessage,
     HistoryCommandMessage,
+    FullReportCommandMessage,
     ImportCommandMessage,
     InternalEventMessage,
     LogMessage,
@@ -58,6 +59,7 @@ class CommandTopicSpecs:
     IMPORT: str = '/import'
     STATUS: str = '/status'
     HISTORY: str = '/history'
+    FULL_REPORT: str = '/full_report'
     BALANCE_LIMIT: str = '/balance/limit'
     BALANCE_PAPER: str = '/balance/paper'
     COMMAND_SHORTCUT: str = '/command_shortcuts'
@@ -97,6 +99,7 @@ class MQTTCommands:
         self._import_uri = f'{topic_prefix}{TopicSpecs.COMMANDS.IMPORT}'
         self._status_uri = f'{topic_prefix}{TopicSpecs.COMMANDS.STATUS}'
         self._history_uri = f'{topic_prefix}{TopicSpecs.COMMANDS.HISTORY}'
+        self._full_report_uri = f'{topic_prefix}{TopicSpecs.COMMANDS.FULL_REPORT}'
         self._balance_limit_uri = f'{topic_prefix}{TopicSpecs.COMMANDS.BALANCE_LIMIT}'
         self._balance_paper_uri = f'{topic_prefix}{TopicSpecs.COMMANDS.BALANCE_PAPER}'
         self._shortcuts_uri = f'{topic_prefix}{TopicSpecs.COMMANDS.COMMAND_SHORTCUT}'
@@ -133,6 +136,11 @@ class MQTTCommands:
             rpc_name=self._history_uri,
             msg_type=HistoryCommandMessage,
             on_request=self._on_cmd_history
+        )
+        self._node.create_rpc(
+            rpc_name=self._full_report_uri,
+            msg_type=FullReportCommandMessage,
+            on_request=self._on_cmd_full_report
         )
         self._node.create_rpc(
             rpc_name=self._balance_limit_uri,
@@ -318,6 +326,21 @@ class MQTTCommands:
                 trades = self._hb_app.get_history_trades_json(msg.days)
                 if trades:
                     response.trades = trades
+        except Exception as e:
+            response.status = MQTT_STATUS_CODE.ERROR
+            response.msg = str(e)
+        return response
+
+    def _on_cmd_full_report(self, msg: FullReportCommandMessage.Request):
+        response = FullReportCommandMessage.Response()
+        try:
+            response.json = self._hb_app.full_report(msg.days, msg.verbose, msg.precision)
+            # if msg.async_backend:
+            #     self._hb_app.history(msg.days, msg.verbose, msg.precision)
+            # else:
+            #     trades = self._hb_app.get_history_trades_json(msg.days)
+            #     if trades:
+            #         response.trades = trades
         except Exception as e:
             response.status = MQTT_STATUS_CODE.ERROR
             response.msg = str(e)

@@ -244,3 +244,263 @@ class HistoryCommand:
         else:
             lines.extend(["\n  No past trades in this session."])
         self.notify("\n".join(lines))
+
+    def full_report(self,  # type: HummingbotApplication
+                days: float = 0,
+                verbose: bool = False,
+                precision: Optional[int] = None
+                ):
+        """
+        Generates a full performance report in JSON format.
+
+        :param days: Number of days of trade history to include.
+        :param precision: Decimal precision for numerical values.
+        :return: JSON string containing the performance report.
+        """
+        if threading.current_thread() != threading.main_thread():
+            self.ev_loop.call_soon_threadsafe(self.full_report, days, precision)
+            return json.dumps({"error": "Report generation must be run in the main thread."})
+
+        if self.strategy_file_name is None:
+            return json.dumps({"error": "Please import a strategy config file to show historical performance."})
+
+        start_time = get_timestamp(days) if days > 0 else self.init_time
+        with self.trade_fill_db.get_new_session() as session:
+            trades: List[TradeFill] = self._get_trades_from_session(
+                int(start_time * 1e3),
+                session=session,
+                config_file_path=self.strategy_file_name)
+
+            if not trades:
+                return json.dumps({"message": "No past trades to report."})
+
+            return asyncio.run(self.history_full_report(start_time, trades, precision, return_json=True))
+
+    async def history_full_report(self,  # type: HummingbotApplication
+                             start_time: float,
+                             trades: List[TradeFill],
+                             precision: Optional[int] = None,
+                             display_report: bool = False,
+                             return_json: bool = True) -> str:
+        """
+        Processes historical trade data and generates a performance report.
+
+        :param start_time: The start time of the report.
+        :param trades: List of trades.
+        :param precision: Decimal precision for numerical values.
+        :param display_report: Whether to display the report.
+        :param return_json: Whether to return the report as JSON.
+        :return: JSON string if return_json is True.
+        """
+        market_info: Set[Tuple[str, str]] = set((t.market, t.symbol) for t in trades)
+        report_data = {
+            "start_time": datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S'),
+            "current_time": datetime.fromtimestamp(get_timestamp()).strftime('%Y-%m-%d %H:%M:%S'),
+            "duration": str(pd.Timedelta(seconds=int(get_timestamp() - start_time))),
+            "markets": []
+        }
+
+        return_pcts = []
+        for market, symbol in market_info:
+            cur_trades = [t for t in trades if t.market == market and t.symbol == symbol]
+            network_timeout = float(self.client_config_map.commands_timeout.other_commands_timeout)
+
+            try:
+                cur_balances = await asyncio.wait_for(self.get_current_balances(market), network_timeout)
+            except asyncio.TimeoutError:
+                return json.dumps({"error": "Network timeout prevented balance retrieval."})
+
+            perf = await PerformanceMetrics.create(symbol, cur_trades, cur_balances)
+            market_report = self.collect_performance_data(market, symbol, perf, precision)
+            report_data["markets"].append(market_report)
+
+            return_pcts.append(perf.return_pct)
+
+        avg_return = sum(return_pcts) / len(return_pcts) if return_pcts else s_decimal_0
+        report_data["average_return"] = f"{avg_return:.2%}" if return_pcts else "N/A"
+
+        return json.dumps(report_data, indent=4)
+
+    def collect_performance_data(self,  # type: HummingbotApplication
+                                 market: str,
+                                 trading_pair: str,
+                                 perf: PerformanceMetrics,
+                                 precision: int) -> dict:
+        """
+        Collects performance data for a given market and trading pair.
+
+        :param market: The market name.
+        :param trading_pair: The trading pair.
+        :param perf: PerformanceMetrics instance.
+        :param precision: Decimal precision.
+        :return: Dictionary with performance data.
+        """
+        base, quote = trading_pair.split("-")
+
+        # **Trades Data**
+        trades_data = {
+            "number_of_trades": {
+                "buy": perf.num_buys,
+                "sell": perf.num_sells,
+                "total": perf.num_trades
+            },
+            "total_trade_volume": {
+                base: {
+                    "buy": str(PerformanceMetrics.smart_round(perf.b_vol_base, precision)),
+                    "sell": str(PerformanceMetrics.smart_round(perf.s_vol_base, precision)),
+                    "total": str(PerformanceMetrics.smart_round(perf.tot_vol_base, precision))
+                },
+                quote: {
+                    "buy": str(PerformanceMetrics.smart_round(perf.b_vol_quote, precision)),
+                    "sell": str(PerformanceMetrics.smart_round(perf.s_vol_quote, precision)),
+                    "total": str(PerformanceMetrics.smart_round(perf.tot_vol_quote, precision))
+                }
+            },
+            "average_price": {
+                "buy": str(PerformanceMetrics.smart_round(perf.avg_b_price, precision)),
+                "sell": str(PerformanceMetrics.smart_round(perf.avg_s_price, precision)),
+                "total": str(PerformanceMetrics.smart_round(perf.avg_tot_price, precision))
+            }
+        }
+
+        # **Assets Data**
+        assets_data = {
+            base: "-" if market in AllConnectorSettings.get_derivative_names() else {
+                "start": str(PerformanceMetrics.smart_round(perf.start_base_bal, precision)),
+                "current": str(PerformanceMetrics.smart_round(perf.cur_base_bal, precision)),
+                "change": str(PerformanceMetrics.smart_round(perf.tot_vol_base, precision))
+            },
+            quote: {
+                "start": str(PerformanceMetrics.smart_round(perf.start_quote_bal, precision)),
+                "current": str(PerformanceMetrics.smart_round(perf.cur_quote_bal, precision)),
+                "change": str(PerformanceMetrics.smart_round(perf.tot_vol_quote, precision))
+            },
+            "trading_pair_price": {
+                "start": str(PerformanceMetrics.smart_round(perf.start_price, precision)),
+                "current": str(PerformanceMetrics.smart_round(perf.cur_price, precision)),
+                "change": str(PerformanceMetrics.smart_round(perf.cur_price - perf.start_price, precision))
+            },
+            "base_asset_percentage": "-" if market in AllConnectorSettings.get_derivative_names() else {
+                "start": f"{perf.start_base_ratio_pct:.2%}",
+                "current": f"{perf.cur_base_ratio_pct:.2%}",
+                "change": f"{perf.cur_base_ratio_pct - perf.start_base_ratio_pct:.2%}"
+            }
+        }
+
+        # **Performance Data**
+        performance_data = {
+            "hold_portfolio_value": f"{PerformanceMetrics.smart_round(perf.hold_value, precision)} {quote}",
+            "current_portfolio_value": f"{PerformanceMetrics.smart_round(perf.cur_value, precision)} {quote}",
+            "trade_pnl": f"{PerformanceMetrics.smart_round(perf.trade_pnl, precision)} {quote}",
+            "fees_paid": {
+                fee_token: str(PerformanceMetrics.smart_round(fee_amount, precision))
+                for fee_token, fee_amount in perf.fees.items()
+            },
+            "total_pnl": f"{PerformanceMetrics.smart_round(perf.total_pnl, precision)} {quote}",
+            "return_percentage": f"{perf.return_pct:.2%}"
+        }
+
+        return {
+            "market": market,
+            "trading_pair": trading_pair,
+            "trades": trades_data,
+            "assets": assets_data,
+            "performance": performance_data
+        }
+    # async def history_full_report(self,  # type: HummingbotApplication
+    #                          start_time: float,
+    #                          trades: List[TradeFill],
+    #                          precision: Optional[int] = None,
+    #                          display_report: bool = False,
+    #                          return_json: bool = True) -> str:
+    #     """
+    #     Processes historical trade data and generates a performance report.
+    #
+    #     :param start_time: The start time of the report.
+    #     :param trades: List of trades.
+    #     :param precision: Decimal precision for numerical values.
+    #     :param display_report: Whether to display the report.
+    #     :param return_json: Whether to return the report as JSON.
+    #     :return: JSON string if return_json is True.
+    #     """
+    #     market_info: Set[Tuple[str, str]] = set((t.market, t.symbol) for t in trades)
+    #     report_data = {
+    #         "start_time": datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S'),
+    #         "current_time": datetime.fromtimestamp(get_timestamp()).strftime('%Y-%m-%d %H:%M:%S'),
+    #         "duration": str(pd.Timedelta(seconds=int(get_timestamp() - start_time))),
+    #         "markets": []
+    #     }
+    #
+    #     return_pcts = []
+    #     for market, symbol in market_info:
+    #         cur_trades = [t for t in trades if t.market == market and t.symbol == symbol]
+    #         network_timeout = float(self.client_config_map.commands_timeout.other_commands_timeout)
+    #
+    #         try:
+    #             cur_balances = await asyncio.wait_for(self.get_current_balances(market), network_timeout)
+    #         except asyncio.TimeoutError:
+    #             return json.dumps({"error": "Network timeout prevented balance retrieval."})
+    #
+    #         perf = await PerformanceMetrics.create(symbol, cur_trades, cur_balances)
+    #         market_report = self.collect_performance_data(market, symbol, perf, precision)
+    #         report_data["markets"].append(market_report)
+    #
+    #         return_pcts.append(perf.return_pct)
+    #
+    #     avg_return = sum(return_pcts) / len(return_pcts) if return_pcts else s_decimal_0
+    #     report_data["average_return"] = f"{avg_return:.2%}" if return_pcts else "N/A"
+    #
+    #     return json.dumps(report_data, indent=4)
+
+    # def collect_performance_data(self,  # type: HummingbotApplication
+    #                              market: str,
+    #                              trading_pair: str,
+    #                              perf: PerformanceMetrics,
+    #                              precision: int) -> dict:
+    #     """
+    #     Collects performance data for a given market and trading pair.
+    #
+    #     :param market: The market name.
+    #     :param trading_pair: The trading pair.
+    #     :param perf: PerformanceMetrics instance.
+    #     :param precision: Decimal precision.
+    #     :return: Dictionary with performance data.
+    #     """
+    #     base, quote = trading_pair.split("-")
+    #     report = {
+    #         "market": market,
+    #         "trading_pair": trading_pair,
+    #         "trades": {
+    #             "number_of_trades": perf.num_trades,
+    #             "buy_trades": perf.num_buys,
+    #             "sell_trades": perf.num_sells,
+    #             "total_volume_base": str(PerformanceMetrics.smart_round(perf.tot_vol_base, precision)),
+    #             "total_volume_quote": str(PerformanceMetrics.smart_round(perf.tot_vol_quote, precision)),
+    #             "avg_price": str(PerformanceMetrics.smart_round(perf.avg_tot_price, precision))
+    #         },
+    #         "assets": {
+    #             "base_start": str(PerformanceMetrics.smart_round(perf.start_base_bal, precision)),
+    #             "base_current": str(PerformanceMetrics.smart_round(perf.cur_base_bal, precision)),
+    #             "quote_start": str(PerformanceMetrics.smart_round(perf.start_quote_bal, precision)),
+    #             "quote_current": str(PerformanceMetrics.smart_round(perf.cur_quote_bal, precision)),
+    #             "trading_pair_price_start": str(PerformanceMetrics.smart_round(perf.start_price)),
+    #             "trading_pair_price_current": str(PerformanceMetrics.smart_round(perf.cur_price)),
+    #             "price_change": str(PerformanceMetrics.smart_round(perf.cur_price - perf.start_price)),
+    #             "base_asset_percentage_start": f"{perf.start_base_ratio_pct:.2%}",
+    #             "base_asset_percentage_current": f"{perf.cur_base_ratio_pct:.2%}"
+    #         },
+    #         "performance": {
+    #             "hold_portfolio_value": f"{PerformanceMetrics.smart_round(perf.hold_value, precision)} {quote}",
+    #             "current_portfolio_value": f"{PerformanceMetrics.smart_round(perf.cur_value, precision)} {quote}",
+    #             "trade_pnl": f"{PerformanceMetrics.smart_round(perf.trade_pnl, precision)} {quote}",
+    #             "total_pnl": f"{PerformanceMetrics.smart_round(perf.total_pnl, precision)} {quote}",
+    #             "return_pct": f"{perf.return_pct:.2%}"
+    #         },
+    #         "fees": {
+    #             fee_token: str(PerformanceMetrics.smart_round(fee_amount, precision))
+    #             for fee_token, fee_amount in perf.fees.items()
+    #         }
+    #     }
+    #
+    #     return report
+
