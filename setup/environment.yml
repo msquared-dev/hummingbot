@@ -10,7 +10,7 @@ dependencies:
   - nomkl
   - nose=1.3.7
   - nose-exclude
-  - numpy
+  - numpy=1.23.5
   - numpy-base=1.23.5
   - pandas=1.5.3
   - pip
