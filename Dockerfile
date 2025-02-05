@@ -24,14 +24,13 @@ COPY setup.py .
 COPY LICENSE .
 COPY README.md .
 
-# activate hummingbot env when entering the CT
+# Activate hummingbot environment when entering the container
 SHELL [ "/bin/bash", "-lc" ]
-RUN echo "conda activate hummingbot" >> ~/.bashrc
+RUN echo "source ~/.bashrc && conda activate hummingbot" >> ~/.bashrc
 
 RUN python3 setup.py build_ext --inplace -j 8 && \
     rm -rf build/ && \
     find . -type f -name "*.cpp" -delete
-
 
 # Build final image using artifacts from builder
 FROM continuumio/miniconda3:latest AS release
@@ -51,7 +50,6 @@ LABEL date=${BUILD_DATE}
 ENV COMMIT_SHA=${COMMIT}
 ENV COMMIT_BRANCH=${BRANCH}
 ENV BUILD_DATE=${DATE}
-
 ENV INSTALLATION_TYPE=docker
 
 # Install system dependencies
@@ -68,9 +66,8 @@ WORKDIR /home/hummingbot
 COPY --from=builder /opt/conda/ /opt/conda/
 COPY --from=builder /home/ /home/
 
-# Setting bash as default shell because we have .bashrc with customized PATH (setting SHELL affects RUN, CMD and ENTRYPOINT, but not manual commands e.g. `docker run image COMMAND`!)
+# Setting bash as default shell because we have .bashrc with customized PATH
 SHELL [ "/bin/bash", "-lc" ]
 
-# Set the default command to run when starting the container
-
-CMD conda activate hummingbot && ./bin/hummingbot_quickstart.py 2>> ./logs/errors.log
+# Set the entrypoint script to ensure proper Conda activation
+ENTRYPOINT ["/bin/bash", "-c", "source ~/.bashrc && conda activate hummingbot && ./bin/hummingbot_quickstart.py 2>> ./logs/errors.log"]
