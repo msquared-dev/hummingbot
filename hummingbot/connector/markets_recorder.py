@@ -80,7 +80,7 @@ class MarketsRecorder:
         if threading.current_thread() != threading.main_thread():
             raise EnvironmentError("MarketsRecorded can only be initialized from the main thread.")
 
-        with open("hummingbot/user/user.json", r) as f:
+        with open("hummingbot/user/user.json", "r") as f:
             user_data = json.load(f)
             self.user_name = user_data.get("user_name", None)
 
