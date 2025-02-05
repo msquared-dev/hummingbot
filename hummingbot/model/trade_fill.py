@@ -23,6 +23,7 @@ class TradeFill(HummingbotBase):
                             "market", "quote_asset", "timestamp")
                       )
 
+    user_name = Column(Text, nullable=False)
     config_file_path = Column(Text, nullable=False)
     strategy = Column(Text, nullable=False)
     market = Column(Text, primary_key=True, nullable=False)

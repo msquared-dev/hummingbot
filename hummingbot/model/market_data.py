@@ -12,6 +12,7 @@ class MarketData(HummingbotBase):
         Index("timestamp", "exchange", "trading_pair"),
     )
 
+    user_name = Column(Text, nullable=False)
     timestamp = Column(SqliteDecimal(6), primary_key=True, nullable=False)
     exchange = Column(Text, nullable=False)
     trading_pair = Column(Text, nullable=False)

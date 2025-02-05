@@ -29,6 +29,7 @@ class Order(HummingbotBase):
                             "market", "quote_asset", "creation_timestamp"))
 
     id = Column(Text, primary_key=True, nullable=False)
+    user_name = Column(Text, nullable=False)
     config_file_path = Column(Text, nullable=False)
     strategy = Column(Text, nullable=False)
     market = Column(Text, nullable=False)

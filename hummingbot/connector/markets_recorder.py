@@ -80,6 +80,10 @@ class MarketsRecorder:
         if threading.current_thread() != threading.main_thread():
             raise EnvironmentError("MarketsRecorded can only be initialized from the main thread.")
 
+        with open(hummingbot/user/user.json) as f:
+            user_data = json.load(f)
+            self.user_name = user_data.get("user_name", None)
+
         self._ev_loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self._sql_manager: SQLConnectionManager = sql
         self._markets: List[ConnectorBase] = markets
@@ -145,6 +149,7 @@ class MarketsRecorder:
                                     order_book = market.get_order_book(trading_pair)
                                     depth = self._market_data_collection_config.market_data_collection_depth + 1
                                     market_data = MarketData(
+                                        user_name=self.user_name,
                                         timestamp=self.db_timestamp,
                                         exchange=exchange,
                                         trading_pair=trading_pair,
@@ -314,6 +319,7 @@ class MarketsRecorder:
         with self._sql_manager.get_new_session() as session:
             with session.begin():
                 order_record: Order = Order(id=evt.order_id,
+                                            user_name=self.user_name,
                                             config_file_path=self._config_file_path,
                                             strategy=self._strategy_name,
                                             market=market.display_name,
@@ -375,6 +381,7 @@ class MarketsRecorder:
                     self.logger().error(f"Error calculating fee in quote: {e}, will be stored in the DB as 0.")
                     fee_in_quote = 0
                 trade_fill_record: TradeFill = TradeFill(
+                    user_name=self.user_name,
                     config_file_path=self.config_file_path,
                     strategy=self.strategy_name,
                     market=market.display_name,
