@@ -126,7 +126,7 @@ class FullReportCommandMessage(RPCMessage):
     class Response(RPCMessage.Response):
         status: Optional[int] = MQTT_STATUS_CODE.SUCCESS
         msg: Optional[str] = ''
-        json: Optional[str] = ''
+        report: Optional[str] = ''
         # trades: Optional[List[Any]] = []
 
 class BalanceLimitCommandMessage(RPCMessage):
