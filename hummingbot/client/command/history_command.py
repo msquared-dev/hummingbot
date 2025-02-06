@@ -258,9 +258,9 @@ class HistoryCommand:
         :param precision: Decimal precision for numerical values.
         :return: JSON string containing the performance report.
         """
-        if threading.current_thread() != threading.main_thread():
-            self.ev_loop.call_soon_threadsafe(self.full_report, days, precision)
-            return json.dumps({"error": "Report generation must be run in the main thread."})
+        # if threading.current_thread() != threading.main_thread():
+        #     self.ev_loop.call_soon_threadsafe(self.full_report, days, precision)
+        #     return json.dumps({"error": "Report generation must be run in the main thread."})
 
         if self.strategy_file_name is None:
             return json.dumps({"error": "Please import a strategy config file to show historical performance."})
