@@ -272,7 +272,7 @@ class HistoryCommand:
                 session=session,
                 config_file_path=self.strategy_file_name)
             if not trades:
-                return json.dumps({"error": "No past trades to report."})
+                return json.dumps({"error": "No past trades to report."}), []
 
             loop = asyncio.get_event_loop()
 
