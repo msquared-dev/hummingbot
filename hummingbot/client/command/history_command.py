@@ -3,7 +3,7 @@ import threading
 import time
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, List, Optional, Set, Tuple, Any
 
 import pandas as pd
 
@@ -271,15 +271,19 @@ class HistoryCommand:
                 int(start_time * 1e3),
                 session=session,
                 config_file_path=self.strategy_file_name)
+            if not trades:
+                return json.dumps({"error": "No past trades to report."})
 
-            return list([TradeFill.to_bounty_api_json(t) for t in trades])
+            loop = asyncio.get_event_loop()
+
+            return loop.run_until_complete(self.history_full_report(start_time, trades, precision, verbose, True)), list([TradeFill.to_bounty_api_json(t) for t in trades])
 
     async def history_full_report(self,  # type: HummingbotApplication
                              start_time: float,
                              trades: List[TradeFill],
                              precision: Optional[int] = None,
                              display_report: bool = False,
-                             return_json: bool = True) -> str:
+                             return_json: bool = True) -> dict[str, Any]:
         """
         Processes historical trade data and generates a performance report.
 

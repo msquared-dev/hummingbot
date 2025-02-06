@@ -334,7 +334,7 @@ class MQTTCommands:
     def _on_cmd_full_report(self, msg: FullReportCommandMessage.Request):
         response = FullReportCommandMessage.Response()
         try:
-            response.trades = self._hb_app.full_report(msg.days, msg.verbose, msg.precision)
+            response.report, response.trades = self._hb_app.full_report(msg.days, msg.verbose, msg.precision)
             # if msg.async_backend:
             #     self._hb_app.history(msg.days, msg.verbose, msg.precision)
             # else:
