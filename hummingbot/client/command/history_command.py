@@ -274,7 +274,7 @@ class HistoryCommand:
             if not trades:
                 return json.dumps({"error": "No past trades to report."}), []
 
-            return asyncio.run(self.history_full_report(start_time, trades, precision, verbose, True)), list([TradeFill.to_bounty_api_json(t) for t in trades])
+            return asyncio.run(self.history_full_report(start_time, trades, precision, verbose, True))
 
     async def history_full_report(self,  # type: HummingbotApplication
                              start_time: float,
