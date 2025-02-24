@@ -3,7 +3,7 @@ import threading
 import time
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, List, Optional, Set, Tuple, Any
 
 import pandas as pd
 
@@ -347,6 +347,7 @@ class HistoryCommand:
                 return json.dumps({"error": "No strategy config files found in trade history."})
 
             report_data = {"strategies": {}}
+
 
             for strategy_file in unique_strategy_files:
                 start_time = get_timestamp(days) if days > 0 else self.init_time
