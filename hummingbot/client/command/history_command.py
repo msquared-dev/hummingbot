@@ -328,7 +328,7 @@ class HistoryCommand:
             try:
                 cur_balances = await asyncio.wait_for(self.get_current_balances(market), network_timeout)
             except asyncio.TimeoutError:
-                return json.dumps({"error": "Network timeout prevented balance retrieval."})
+                return {"error": "Network timeout prevented balance retrieval."}
 
             perf = await PerformanceMetrics.create(symbol, cur_trades, cur_balances)
             market_report = self.collect_performance_data(market, symbol, perf, precision)
@@ -339,7 +339,7 @@ class HistoryCommand:
         avg_return = sum(return_pcts) / len(return_pcts) if return_pcts else s_decimal_0
         report_data["average_return"] = f"{avg_return:.2%}" if return_pcts else "N/A"
 
-        return json.dumps(report_data, indent=4)
+        return report_data
 
     def collect_performance_data(self,  # type: HummingbotApplication
                                  market: str,
