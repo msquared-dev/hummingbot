@@ -274,6 +274,7 @@ class HistoryCommand:
             return json.dumps({"error": "No strategy config files found in trade history."})
 
         report_data = {"strategies": {}}
+        report_data['unique_strategy_files'] = unique_strategy_files
 
         for strategy_file in unique_strategy_files:
             start_time = get_timestamp(days) if days > 0 else self.init_time
@@ -293,10 +294,9 @@ class HistoryCommand:
                     answer = asyncio.run(self.history_full_report(start_time, trades, precision, verbose, True))
                     report_data["strategies"][strategy_file] = json.loads(answer)
 
-                report_data['unique_strategy_files'] = unique_strategy_files
                 return json.dumps(report_data, indent=4)
 
-            return json.dumps(report_data, indent=4)
+        return json.dumps(report_data, indent=4)
 
     async def history_full_report(self,  # type: HummingbotApplication
                              start_time: float,
