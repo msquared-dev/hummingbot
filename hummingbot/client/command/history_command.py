@@ -273,7 +273,7 @@ class HistoryCommand:
         if not unique_strategy_files:
             return json.dumps({"error": "No strategy config files found in trade history."})
 
-        report_data = {}
+        report_data = {"strategies": {}}
 
         for strategy_file in unique_strategy_files:
             start_time = get_timestamp(days) if days > 0 else self.init_time
@@ -291,7 +291,7 @@ class HistoryCommand:
                 else:
                     # return asyncio.run(self.history_full_report(start_time, trades, precision, verbose, True))
                     answer = asyncio.run(self.history_full_report(start_time, trades, precision, verbose, True))
-                    report_data["strategies"][strategy_file] = answer
+                    report_data["strategies"][strategy_file] = json.loads(answer)
 
                 report_data['unique_strategy_files'] = unique_strategy_files
                 return json.dumps(report_data, indent=4)
