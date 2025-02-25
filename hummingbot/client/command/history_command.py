@@ -119,6 +119,7 @@ class HistoryCommand:
                 SELECT total_currency, total_token
                 FROM bots_backend_statisticslogmodel
                 WHERE bot = :bot
+                ORDER BY created_at DESC
                 """,
                 {"bot": config_file_path}
             )
@@ -456,51 +457,51 @@ class HistoryCommand:
             "return_percentage": f"{perf.return_pct:.2%}"
         }
 
-        trading_data = {
-            "accumulation_distribution": {
-                "total_holdings": str(PerformanceMetrics.smart_round(perf.tot_vol_base, precision)),
-                "average_cost_basis": str(
-                    PerformanceMetrics.smart_round(
-                        perf.b_vol_quote / perf.tot_vol_base if perf.tot_vol_base > 0 else 0, precision
-                    )
-                ),
-                "total_usdt_spent": str(PerformanceMetrics.smart_round(perf.b_vol_quote, precision)),
-                "total_usdt_received": str(PerformanceMetrics.smart_round(perf.s_vol_quote, precision))
-            },
-            "profit_performance_metrics": {
-                "unrealized_pnl": str(
-                    PerformanceMetrics.smart_round(
-                        (perf.cur_price - (
-                            perf.b_vol_quote / perf.tot_vol_base if perf.tot_vol_base > 0 else 0)) * perf.tot_vol_base,
-                        precision
-                    )
-                ),
-                "realized_pnl": str(PerformanceMetrics.smart_round(perf.s_vol_quote - perf.b_vol_quote, precision)),
-                "total_net_pnl": str(
-                    PerformanceMetrics.smart_round(
-                        (perf.s_vol_quote - perf.b_vol_quote) + ((perf.cur_price - (
-                            perf.b_vol_quote / perf.tot_vol_base if perf.tot_vol_base > 0 else 0)) * perf.tot_vol_base),
-                        precision
-                    )
-                ),
-                "effective_sell_vs_buy_price": str(
-                    PerformanceMetrics.smart_round(perf.avg_s_price - perf.avg_b_price, precision)
-                )
-            },
-            "capital_recycling": {
-                "usdt_available_for_reentry": str(
-                    PerformanceMetrics.smart_round(
-                        (perf.s_vol_quote - perf.b_vol_quote) + perf.cur_quote_bal, precision
-                    )
-                ),
-                "reinvestment_amount_per_cycle": str(
-                    PerformanceMetrics.smart_round(
-                        (perf.s_vol_quote - perf.b_vol_quote) + perf.cur_quote_bal, precision
-                    )
-                ),
-                "retracement_buy_trigger_price": "N/A"  # Needs historical peak price tracking
-            }
-        }
+        # trading_data = {
+        #     "accumulation_distribution": {
+        #         "total_holdings": str(PerformanceMetrics.smart_round(perf.tot_vol_base, precision)),
+        #         "average_cost_basis": str(
+        #             PerformanceMetrics.smart_round(
+        #                 perf.b_vol_quote / perf.tot_vol_base if perf.tot_vol_base > 0 else 0, precision
+        #             )
+        #         ),
+        #         "total_usdt_spent": str(PerformanceMetrics.smart_round(perf.b_vol_quote, precision)),
+        #         "total_usdt_received": str(PerformanceMetrics.smart_round(perf.s_vol_quote, precision))
+        #     },
+        #     "profit_performance_metrics": {
+        #         "unrealized_pnl": str(
+        #             PerformanceMetrics.smart_round(
+        #                 (perf.cur_price - (
+        #                     perf.b_vol_quote / perf.tot_vol_base if perf.tot_vol_base > 0 else 0)) * perf.tot_vol_base,
+        #                 precision
+        #             )
+        #         ),
+        #         "realized_pnl": str(PerformanceMetrics.smart_round(perf.s_vol_quote - perf.b_vol_quote, precision)),
+        #         "total_net_pnl": str(
+        #             PerformanceMetrics.smart_round(
+        #                 (perf.s_vol_quote - perf.b_vol_quote) + ((perf.cur_price - (
+        #                     perf.b_vol_quote / perf.tot_vol_base if perf.tot_vol_base > 0 else 0)) * perf.tot_vol_base),
+        #                 precision
+        #             )
+        #         ),
+        #         "effective_sell_vs_buy_price": str(
+        #             PerformanceMetrics.smart_round(perf.avg_s_price - perf.avg_b_price, precision)
+        #         )
+        #     },
+        #     "capital_recycling": {
+        #         "usdt_available_for_reentry": str(
+        #             PerformanceMetrics.smart_round(
+        #                 (perf.s_vol_quote - perf.b_vol_quote) + perf.cur_quote_bal, precision
+        #             )
+        #         ),
+        #         "reinvestment_amount_per_cycle": str(
+        #             PerformanceMetrics.smart_round(
+        #                 (perf.s_vol_quote - perf.b_vol_quote) + perf.cur_quote_bal, precision
+        #             )
+        #         ),
+        #         "retracement_buy_trigger_price": "N/A"  # Needs historical peak price tracking
+        #     }
+        # }
 
         return {
             "market": market,
@@ -508,5 +509,5 @@ class HistoryCommand:
             "trades": trades_data,
             "assets": assets_data,
             "performance": performance_data,
-            "trading_data": trading_data
+            # "trading_data": trading_data
         }
