@@ -262,19 +262,38 @@ class HistoryCommand:
         #     self.ev_loop.call_soon_threadsafe(self.full_report, days, precision)
         #     return json.dumps({"error": "Report generation must be run in the main thread."})
 
-        if self.strategy_file_name is None:
-            return json.dumps({"error": "Please import a strategy config file to show historical performance."})
+        # if self.strategy_file_name is None:
+        #     return json.dumps({"error": "Please import a strategy config file to show historical performance."})
 
-        start_time = get_timestamp(days) if days > 0 else self.init_time
+        # Retrieve all unique strategy config files from the database
         with self.trade_fill_db.get_new_session() as session:
-            trades: List[TradeFill] = self._get_trades_from_session(
-                int(start_time * 1e3),
-                session=session,
-                config_file_path=self.strategy_file_name)
-            if not trades:
-                return json.dumps({"error": "No past trades to report."}), []
+            unique_strategy_files = session.query(TradeFill.config_file_path).distinct().all()
+            unique_strategy_files = [row[0] for row in unique_strategy_files if row[0] is not None]
 
-            return asyncio.run(self.history_full_report(start_time, trades, precision, verbose, True))
+        if not unique_strategy_files:
+            return json.dumps({"error": "No strategy config files found in trade history."})
+
+        report_data = {}
+
+        for strategy_file in unique_strategy_files:
+            start_time = get_timestamp(days) if days > 0 else self.init_time
+            with self.trade_fill_db.get_new_session() as session:
+                trades: List[TradeFill] = self._get_trades_from_session(
+                    int(start_time * 1e3),
+                    session=session,
+                    config_file_path=strategy_file)
+                    # config_file_path=self.strategy_file_name)
+                if not trades:
+                    # return json.dumps({"error": "No past trades to report."}), []
+                    answer, addition = json.dumps({"error": "No past trades to report."}), []
+                    report_data["strategies"][strategy_file] = answer
+
+                else:
+                    # return asyncio.run(self.history_full_report(start_time, trades, precision, verbose, True))
+                    answer = asyncio.run(self.history_full_report(start_time, trades, precision, verbose, True))
+                    report_data["strategies"][strategy_file] = answer
+
+        return json.dumps(report_data, indent=4)
 
     async def history_full_report(self,  # type: HummingbotApplication
                              start_time: float,
@@ -400,10 +419,46 @@ class HistoryCommand:
             "return_percentage": f"{perf.return_pct:.2%}"
         }
 
+        trading_data = {
+            "accumulation_distribution": {
+                "total_holdings": str(PerformanceMetrics.smart_round(perf.tot_vol_base, precision)),
+                "average_cost_basis": str(PerformanceMetrics.smart_round(
+                    perf.b_vol_quote / perf.tot_vol_base if perf.tot_vol_base > 0 else 0, precision
+                )),
+                "total_usdt_spent": str(PerformanceMetrics.smart_round(perf.b_vol_quote, precision)),
+                "total_usdt_received": str(PerformanceMetrics.smart_round(perf.s_vol_quote, precision))
+            },
+            "profit_performance_metrics": {
+                "unrealized_pnl": str(PerformanceMetrics.smart_round(
+                    (perf.cur_price - (
+                        perf.b_vol_quote / perf.tot_vol_base if perf.tot_vol_base > 0 else 0)) * perf.tot_vol_base,
+                    precision
+                )),
+                "realized_pnl": str(PerformanceMetrics.smart_round(perf.s_vol_quote - perf.b_vol_quote, precision)),
+                "total_net_pnl": str(PerformanceMetrics.smart_round(
+                    (perf.s_vol_quote - perf.b_vol_quote) + ((perf.cur_price - (
+                        perf.b_vol_quote / perf.tot_vol_base if perf.tot_vol_base > 0 else 0)) * perf.tot_vol_base),
+                    precision
+                )),
+                "effective_sell_vs_buy_price": str(
+                    PerformanceMetrics.smart_round(perf.avg_s_price - perf.avg_b_price, precision))
+            },
+            "capital_recycling": {
+                "usdt_available_for_reentry": str(PerformanceMetrics.smart_round(
+                    (perf.s_vol_quote - perf.b_vol_quote) + perf.cur_quote_bal, precision
+                )),
+                "reinvestment_amount_per_cycle": str(PerformanceMetrics.smart_round(
+                    (perf.s_vol_quote - perf.b_vol_quote) + perf.cur_quote_bal, precision
+                )),
+                "retracement_buy_trigger_price": "N/A"  # Needs historical peak price tracking
+            }
+        }
+
         return {
             "market": market,
             "trading_pair": trading_pair,
             "trades": trades_data,
             "assets": assets_data,
-            "performance": performance_data
+            "performance": performance_data,
+            "trading": trading_data
         }
