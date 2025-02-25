@@ -293,9 +293,7 @@ class HistoryCommand:
                     # return asyncio.run(self.history_full_report(start_time, trades, precision, verbose, True))
                     answer = asyncio.run(self.history_full_report(start_time, trades, precision, verbose, True))
                     report_data["strategies"][strategy_file] = json.loads(answer)
-
-                return json.dumps(report_data, indent=4)
-
+                # return json.dumps(report_data, indent=4)
         return json.dumps(report_data, indent=4)
 
     async def history_full_report(self,  # type: HummingbotApplication
