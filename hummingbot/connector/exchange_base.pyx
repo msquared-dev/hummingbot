@@ -66,6 +66,13 @@ cdef class ExchangeBase(ConnectorBase):
                 if not self.trading_pair_symbol_map_ready():
                     await self._initialize_trading_pair_symbol_map()
         current_map = self._trading_pair_symbol_map or bidict()
+
+        if "WELFUSDT" in current_map:
+            current_map["WELFUSDT"] = "WELF-USDT"
+
+        if "PROPCUSDT" in current_map:
+            current_map["PROPCUSDT"] = "PROPC-USDT"
+
         return current_map
 
     def trading_pair_symbol_map_ready(self):

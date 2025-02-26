@@ -335,12 +335,6 @@ class MQTTCommands:
         response = FullReportCommandMessage.Response()
         try:
             response.report = self._hb_app.full_report(msg.days, msg.verbose, msg.precision)
-            # if msg.async_backend:
-            #     self._hb_app.history(msg.days, msg.verbose, msg.precision)
-            # else:
-            #     trades = self._hb_app.get_history_trades_json(msg.days)
-            #     if trades:
-            #         response.trades = trades
         except Exception as e:
             response.status = MQTT_STATUS_CODE.ERROR
             response.msg = str(e)

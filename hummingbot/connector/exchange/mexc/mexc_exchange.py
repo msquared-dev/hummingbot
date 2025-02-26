@@ -215,8 +215,21 @@ class MexcExchange(ExchangePyBase):
             path_url=CONSTANTS.ORDER_PATH_URL,
             params=api_params,
             is_auth_required=True)
-        if cancel_result.get("status") == "NEW":
+
+        if cancel_result.get("status") == "CANCELED":
             return True
+        return False
+
+    async def _place_cancel2(self, order_id: str, tracked_order: InFlightOrder):
+        symbol = await self.exchange_symbol_associated_to_pair(trading_pair=tracked_order.trading_pair)
+        api_params = {
+            "symbol": symbol,
+            "origClientOrderId": order_id,
+        }
+        _ = await self._api_delete(
+            path_url=CONSTANTS.ORDER_PATH_URL,
+            params=api_params,
+            is_auth_required=True)
         return False
 
     async def _format_trading_rules(self, exchange_info_dict: Dict[str, Any]) -> List[TradingRule]:
