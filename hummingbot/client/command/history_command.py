@@ -120,6 +120,7 @@ class HistoryCommand:
                 FROM bots_backend_statisticslogmodel
                 WHERE bot = :bot
                 ORDER BY created_at DESC
+                LIMIT 1
                 """,
                 {"bot": config_file_path}
             )
