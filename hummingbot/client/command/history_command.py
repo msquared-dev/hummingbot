@@ -308,7 +308,6 @@ class HistoryCommand:
             trades: List[TradeFill] = self._get_trades_from_session(
                 int(start_time * 1e3),
                 session=session,
-                config_file_path=self.strategy_file_name
             )
             if not trades:
                 return json.dumps({"error": "No past trades to report."}), []
@@ -331,12 +330,13 @@ class HistoryCommand:
         :param return_json: Whether to return the report as JSON.
         :return: JSON string if return_json is True.
         """
-        market_info: Set[Tuple[str, str]] = set((t.market, t.symbol) for t in trades)
+        market_info: Set[Tuple[str, str, str]] = set((t.market, t.config_file_path, t.symbol) for t in trades)
+
         report_data = {
             "start_time": datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S'),
             "current_time": datetime.fromtimestamp(get_timestamp()).strftime('%Y-%m-%d %H:%M:%S'),
             "duration": str(pd.Timedelta(seconds=int(get_timestamp() - start_time))),
-            "markets": []
+            "markets": dict()
         }
 
         use_db_balances = False
@@ -346,20 +346,12 @@ class HistoryCommand:
                 use_db_balances = True
 
         return_pcts = []
-        for market, symbol in market_info:
-            cur_trades = [t for t in trades if t.market == market and t.symbol == symbol]
-            network_timeout = float(self.client_config_map.commands_timeout.other_commands_timeout)
-            if use_db_balances:
-                cur_balances = self.get_current_balances_from_db_sync(symbol, trades[0].config_file_path)
-            else:
-                try:
-                    cur_balances = await asyncio.wait_for(self.get_current_balances(market), network_timeout)
-                except asyncio.TimeoutError:
-                    return {"error": "Network timeout prevented balance retrieval."}
-
+        for market, config_file_path, symbol in market_info:
+            cur_trades = [t for t in trades if t.market == market and t.config_file_path == config_file_path]
+            cur_balances = self.get_current_balances_from_db_sync(symbol, trades[0].config_file_path)
             perf = await PerformanceMetrics.create(symbol, cur_trades, cur_balances)
             market_report = self.collect_performance_data(market, symbol, perf, precision)
-            report_data["markets"].append(market_report)
+            report_data["markets"][config_file_path] = market_report
 
             return_pcts.append(perf.return_pct)
 
