@@ -73,6 +73,18 @@ cdef class ExchangeBase(ConnectorBase):
         if "PROPCUSDT" in current_map:
             current_map["PROPCUSDT"] = "PROPC-USDT"
 
+        if "ALVAUSDT" in current_map:
+            current_map["ALVAUSDT"] = "PROPC-USDT"
+
+        if "WELFUSDT" not in current_map:
+            current_map["WELFUSDT"] = "WELF-USDT"
+
+        if "PROPCUSDT" not in current_map:
+            current_map["PROPCUSDT"] = "PROPC-USDT"
+
+        if "ALVAUSDT" not in current_map:
+            current_map["ALVAUSDT"] = "PROPC-USDT"
+
         return current_map
 
     def trading_pair_symbol_map_ready(self):

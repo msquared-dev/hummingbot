@@ -229,7 +229,7 @@ class MexcExchange(ExchangePyBase):
 
         status = cancel_result.get("status")
 
-        if status in ["CANCELED", "FILLED", "PARTIALLY_CANCELED"]:
+        if status in ["CANCELED", "FILLED", "PARTIALLY_CANCELED", "PARTIALLY_FILLED"]:
             self.logger().info(f"Cancel order {order_id} result: {cancel_result} True")
             return True
         self.logger().info(f"Cancel order {order_id} result: {cancel_result} False")
