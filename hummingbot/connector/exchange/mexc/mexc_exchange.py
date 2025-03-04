@@ -216,7 +216,7 @@ class MexcExchange(ExchangePyBase):
             params=api_params,
             is_auth_required=True)
 
-        if cancel_result.get("status") == "CANCELED":
+        if cancel_result.get("status") == "CANCELED" or cancel_result.get("status") == "PARTIALLY_CANCELED":
             return True
         return False
 
