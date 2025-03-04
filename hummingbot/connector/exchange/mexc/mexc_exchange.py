@@ -271,6 +271,15 @@ class MexcExchange(ExchangePyBase):
 
             except Exception:
                 self.logger().exception(f"Error parsing the trading pair rule {rule}. Skipping.")
+        retval.append(
+            TradingRule(
+                trading_pair="ALVA-USDT",
+                min_order_size=Decimal("0.01"),
+                min_price_increment=Decimal("0.0001"),
+                min_base_amount_increment=Decimal("0.01"),
+                min_notional_size=Decimal("1")
+            )
+        )
         return retval
 
     async def _status_polling_loop_fetch_updates(self):
