@@ -592,6 +592,8 @@ class MexcExchange(ExchangePyBase):
                 base=symbol_data["baseAsset"],
                 quote=symbol_data["quoteAsset"]
                 )
+
+        mapping["ALVAUSDT"] = "ALVA-USDT"
         self._set_trading_pair_symbol_map(mapping)
 
     async def _get_last_traded_price(self, trading_pair: str) -> float:
