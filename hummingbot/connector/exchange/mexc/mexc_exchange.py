@@ -1,6 +1,6 @@
 import asyncio
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from bidict import bidict
 
@@ -11,7 +11,7 @@ from hummingbot.connector.exchange.mexc.mexc_api_user_stream_data_source import 
 from hummingbot.connector.exchange.mexc.mexc_auth import MexcAuth
 from hummingbot.connector.exchange_py_base import ExchangePyBase
 from hummingbot.connector.trading_rule import TradingRule
-from hummingbot.connector.utils import TradeFillOrderDetails, combine_to_hb_trading_pair
+from hummingbot.connector.utils import combine_to_hb_trading_pair, TradeFillOrderDetails
 from hummingbot.core.data_type.common import OrderType, TradeType
 from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderUpdate, TradeUpdate
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
@@ -32,13 +32,13 @@ class MexcExchange(ExchangePyBase):
     web_utils = web_utils
 
     def __init__(self,
-                 client_config_map: "ClientConfigAdapter",
-                 mexc_api_key: str,
-                 mexc_api_secret: str,
-                 trading_pairs: Optional[List[str]] = None,
-                 trading_required: bool = True,
-                 domain: str = CONSTANTS.DEFAULT_DOMAIN,
-                 ):
+            client_config_map: "ClientConfigAdapter",
+            mexc_api_key: str,
+            mexc_api_secret: str,
+            trading_pairs: Optional[List[str]] = None,
+            trading_required: bool = True,
+            domain: str = CONSTANTS.DEFAULT_DOMAIN,
+    ):
         self.api_key = mexc_api_key
         self.secret_key = mexc_api_secret
         self._domain = domain
@@ -60,7 +60,8 @@ class MexcExchange(ExchangePyBase):
         return MexcAuth(
             api_key=self.api_key,
             secret_key=self.secret_key,
-            time_provider=self._time_synchronizer)
+            time_provider=self._time_synchronizer
+        )
 
     @property
     def name(self) -> str:
@@ -113,7 +114,9 @@ class MexcExchange(ExchangePyBase):
         return [OrderType.LIMIT, OrderType.LIMIT_MAKER, OrderType.MARKET]
 
     async def get_all_pairs_prices(self) -> List[Dict[str, str]]:
-        pairs_prices = await self._api_get(path_url=CONSTANTS.TICKER_BOOK_PATH_URL, headers={"Content-Type": "application/json"})
+        pairs_prices = await self._api_get(
+            path_url=CONSTANTS.TICKER_BOOK_PATH_URL, headers={"Content-Type": "application/json"}
+            )
         return pairs_prices
 
     def _is_request_exception_related_to_time_synchronizer(self, request_exception: Exception):
@@ -136,14 +139,16 @@ class MexcExchange(ExchangePyBase):
             throttler=self._throttler,
             time_synchronizer=self._time_synchronizer,
             domain=self._domain,
-            auth=self._auth)
+            auth=self._auth
+        )
 
     def _create_order_book_data_source(self) -> OrderBookTrackerDataSource:
         return MexcAPIOrderBookDataSource(
             trading_pairs=self._trading_pairs,
             connector=self,
             domain=self.domain,
-            api_factory=self._web_assistants_factory)
+            api_factory=self._web_assistants_factory
+        )
 
     def _create_user_stream_data_source(self) -> UserStreamTrackerDataSource:
         return MexcAPIUserStreamDataSource(
@@ -155,34 +160,36 @@ class MexcExchange(ExchangePyBase):
         )
 
     def _get_fee(self,
-                 base_currency: str,
-                 quote_currency: str,
-                 order_type: OrderType,
-                 order_side: TradeType,
-                 amount: Decimal,
-                 price: Decimal = s_decimal_NaN,
-                 is_maker: Optional[bool] = None) -> TradeFeeBase:
+            base_currency: str,
+            quote_currency: str,
+            order_type: OrderType,
+            order_side: TradeType,
+            amount: Decimal,
+            price: Decimal = s_decimal_NaN,
+            is_maker: Optional[bool] = None) -> TradeFeeBase:
         is_maker = order_type is OrderType.LIMIT_MAKER
         return DeductedFromReturnsTradeFee(percent=self.estimate_fee_pct(is_maker))
 
     async def _place_order(self,
-                           order_id: str,
-                           trading_pair: str,
-                           amount: Decimal,
-                           trade_type: TradeType,
-                           order_type: OrderType,
-                           price: Decimal,
-                           **kwargs) -> Tuple[str, float]:
+            order_id: str,
+            trading_pair: str,
+            amount: Decimal,
+            trade_type: TradeType,
+            order_type: OrderType,
+            price: Decimal,
+            **kwargs) -> Tuple[str, float]:
         order_result = None
         amount_str = f"{amount:f}"
         type_str = MexcExchange.mexc_order_type(order_type)
         side_str = CONSTANTS.SIDE_BUY if trade_type is TradeType.BUY else CONSTANTS.SIDE_SELL
         symbol = await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
-        api_params = {"symbol": symbol,
-                      "side": side_str,
-                      "quantity": amount_str,
-                      "type": type_str,
-                      "newClientOrderId": order_id}
+        api_params = {
+            "symbol": symbol,
+            "side": side_str,
+            "quantity": amount_str,
+            "type": type_str,
+            "newClientOrderId": order_id
+        }
         if order_type.is_limit_type():
             price_str = f"{price:f}"
             api_params["price"] = price_str
@@ -191,7 +198,8 @@ class MexcExchange(ExchangePyBase):
             order_result = await self._api_post(
                 path_url=CONSTANTS.ORDER_PATH_URL,
                 data=api_params,
-                is_auth_required=True)
+                is_auth_required=True
+            )
             o_id = str(order_result["orderId"])
             transact_time = order_result["transactTime"] * 1e-3
         except IOError as e:
@@ -206,6 +214,8 @@ class MexcExchange(ExchangePyBase):
         return o_id, transact_time
 
     async def _place_cancel(self, order_id: str, tracked_order: InFlightOrder):
+        self.logger().info(f"Test")
+
         symbol = await self.exchange_symbol_associated_to_pair(trading_pair=tracked_order.trading_pair)
         api_params = {
             "symbol": symbol,
@@ -214,10 +224,16 @@ class MexcExchange(ExchangePyBase):
         cancel_result = await self._api_delete(
             path_url=CONSTANTS.ORDER_PATH_URL,
             params=api_params,
-            is_auth_required=True)
+            is_auth_required=True
+        )
 
-        if cancel_result.get("status") == "CANCELED" or cancel_result.get("status") == "PARTIALLY_CANCELED":
+        status = cancel_result.get("status")
+
+        if status in ["CANCELED", "FILLED", "PARTIALLY_CANCELED"]:
+            self.logger().info(f"Cancel order {order_id} result: {cancel_result} True")
             return True
+        self.logger().info(f"Cancel order {order_id} result: {cancel_result} False")
+
         return False
 
     async def _place_cancel2(self, order_id: str, tracked_order: InFlightOrder):
@@ -229,7 +245,8 @@ class MexcExchange(ExchangePyBase):
         _ = await self._api_delete(
             path_url=CONSTANTS.ORDER_PATH_URL,
             params=api_params,
-            is_auth_required=True)
+            is_auth_required=True
+        )
         return False
 
     async def _format_trading_rules(self, exchange_info_dict: Dict[str, Any]) -> List[TradingRule]:
@@ -243,11 +260,14 @@ class MexcExchange(ExchangePyBase):
                 min_amount_inc = Decimal(f"1e-{rule['baseAssetPrecision']}")
                 min_notional = Decimal(rule['quoteAmountPrecision'])
                 retval.append(
-                    TradingRule(trading_pair,
-                                min_order_size=min_order_size,
-                                min_price_increment=min_price_inc,
-                                min_base_amount_increment=min_amount_inc,
-                                min_notional_size=min_notional))
+                    TradingRule(
+                        trading_pair,
+                        min_order_size=min_order_size,
+                        min_price_increment=min_price_inc,
+                        min_base_amount_increment=min_amount_inc,
+                        min_notional_size=min_notional
+                        )
+                )
 
             except Exception:
                 self.logger().exception(f"Error parsing the trading pair rule {rule}. Skipping.")
@@ -279,7 +299,8 @@ class MexcExchange(ExchangePyBase):
                 results: Dict[str, Any] = event_message.get("d", {})
                 if "code" not in event_message and channel not in user_channels:
                     self.logger().error(
-                        f"Unexpected message in user stream: {event_message}.", exc_info=True)
+                        f"Unexpected message in user stream: {event_message}.", exc_info=True
+                    )
                     continue
                 if channel == CONSTANTS.USER_TRADES_ENDPOINT_NAME:
                     self._process_trade_message(results)
@@ -292,7 +313,8 @@ class MexcExchange(ExchangePyBase):
                 raise
             except Exception:
                 self.logger().error(
-                    "Unexpected error in user stream listener loop.", exc_info=True)
+                    "Unexpected error in user stream listener loop.", exc_info=True
+                )
                 await self._sleep(5.0)
 
     def _process_balance_message_ws(self, account):
@@ -335,7 +357,8 @@ class MexcExchange(ExchangePyBase):
         else:
             trade_update = self._create_trade_update_with_order_fill_data(
                 order_fill=trade,
-                order=tracked_order)
+                order=tracked_order
+            )
             self._order_tracker.process_trade_update(trade_update)
 
     def _create_order_update_with_order_status_data(self, order_status: Dict[str, Any], order: InFlightOrder):
@@ -390,11 +413,14 @@ class MexcExchange(ExchangePyBase):
                 }
                 if self._last_poll_timestamp > 0:
                     params["startTime"] = query_time
-                tasks.append(self._api_get(
-                    path_url=CONSTANTS.MY_TRADES_PATH_URL,
-                    params=params,
-                    is_auth_required=True,
-                    headers={"Content-Type": "application/json"}))
+                tasks.append(
+                    self._api_get(
+                        path_url=CONSTANTS.MY_TRADES_PATH_URL,
+                        params=params,
+                        is_auth_required=True,
+                        headers={"Content-Type": "application/json"}
+                    )
+                )
 
             self.logger().debug(f"Polling for order fills of {len(tasks)} trading pairs.")
             results = await safe_gather(*tasks, return_exceptions=True)
@@ -432,10 +458,13 @@ class MexcExchange(ExchangePyBase):
                         self._order_tracker.process_trade_update(trade_update)
                     elif self.is_confirmed_new_order_filled_event(str(trade["id"]), exchange_order_id, trading_pair):
                         # This is a fill of an order registered in the DB but not tracked any more
-                        self._current_trade_fills.add(TradeFillOrderDetails(
-                            market=self.display_name,
-                            exchange_trade_id=str(trade["id"]),
-                            symbol=trading_pair))
+                        self._current_trade_fills.add(
+                            TradeFillOrderDetails(
+                                market=self.display_name,
+                                exchange_trade_id=str(trade["id"]),
+                                symbol=trading_pair
+                            )
+                        )
                         self.trigger_event(
                             MarketEvent.OrderFilled,
                             OrderFilledEvent(
@@ -455,7 +484,8 @@ class MexcExchange(ExchangePyBase):
                                     ]
                                 ),
                                 exchange_trade_id=str(trade["id"])
-                            ))
+                            )
+                        )
                         self.logger().info(f"Recreating missing trade in TradeFill: {trade}")
 
     async def _all_trade_updates_for_order(self, order: InFlightOrder) -> List[TradeUpdate]:
@@ -472,7 +502,8 @@ class MexcExchange(ExchangePyBase):
                 },
                 is_auth_required=True,
                 limit_id=CONSTANTS.MY_TRADES_PATH_URL,
-                headers={"Content-Type": "application/json"})
+                headers={"Content-Type": "application/json"}
+            )
 
             for trade in all_fills_response:
                 exchange_order_id = str(trade["orderId"])
@@ -503,9 +534,11 @@ class MexcExchange(ExchangePyBase):
             path_url=CONSTANTS.ORDER_PATH_URL,
             params={
                 "symbol": trading_pair,
-                "origClientOrderId": tracked_order.client_order_id},
+                "origClientOrderId": tracked_order.client_order_id
+            },
             is_auth_required=True,
-            headers={"Content-Type": "application/json"})
+            headers={"Content-Type": "application/json"}
+        )
 
         new_state = CONSTANTS.ORDER_STATE[updated_order_data["status"]]
 
@@ -526,7 +559,8 @@ class MexcExchange(ExchangePyBase):
         account_info = await self._api_get(
             path_url=CONSTANTS.ACCOUNTS_PATH_URL,
             is_auth_required=True,
-            headers={"Content-Type": "application/json"})
+            headers={"Content-Type": "application/json"}
+        )
 
         balances = account_info["balances"]
         for balance_entry in balances:
@@ -545,8 +579,10 @@ class MexcExchange(ExchangePyBase):
     def _initialize_trading_pair_symbols_from_exchange_info(self, exchange_info: Dict[str, Any]):
         mapping = bidict()
         for symbol_data in filter(mexc_utils.is_exchange_information_valid, exchange_info["symbols"]):
-            mapping[symbol_data["symbol"]] = combine_to_hb_trading_pair(base=symbol_data["baseAsset"],
-                                                                        quote=symbol_data["quoteAsset"])
+            mapping[symbol_data["symbol"]] = combine_to_hb_trading_pair(
+                base=symbol_data["baseAsset"],
+                quote=symbol_data["quoteAsset"]
+                )
         self._set_trading_pair_symbol_map(mapping)
 
     async def _get_last_traded_price(self, trading_pair: str) -> float:
@@ -567,9 +603,13 @@ class MexcExchange(ExchangePyBase):
         await self._api_get(path_url=self.check_network_request_path, headers={"Content-Type": "application/json"})
 
     async def _make_trading_rules_request(self) -> Any:
-        exchange_info = await self._api_get(path_url=self.trading_rules_request_path, headers={"Content-Type": "application/json"})
+        exchange_info = await self._api_get(
+            path_url=self.trading_rules_request_path, headers={"Content-Type": "application/json"}
+            )
         return exchange_info
 
     async def _make_trading_pairs_request(self) -> Any:
-        exchange_info = await self._api_get(path_url=self.trading_pairs_request_path, headers={"Content-Type": "application/json"})
+        exchange_info = await self._api_get(
+            path_url=self.trading_pairs_request_path, headers={"Content-Type": "application/json"}
+            )
         return exchange_info
