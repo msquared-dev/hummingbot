@@ -83,7 +83,7 @@ cdef class ExchangeBase(ConnectorBase):
             current_map["PROPCUSDT"] = "PROPC-USDT"
 
         if "ALVAUSDT" not in current_map:
-            current_map["ALVAUSDT"] = "PROPC-USDT"
+            current_map["ALVAUSDT"] = "ALVA-USDT"
 
         return current_map
 
