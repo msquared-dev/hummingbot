@@ -519,8 +519,6 @@ class HistoryCommand:
             #     if not trades[0].config_file_path.endswith('.yml'):
             #         use_db_balances = True
 
-            performance_data = self.get_performance_metrics_from_db_sync(symbol)
-            report_data['markets'] = performance_data
             # return_pcts = []
             # for market, config_file_path, symbol in market_info:
             #     cur_trades = [t for t in trades if t.market == market and t.config_file_path == config_file_path]
@@ -534,48 +532,51 @@ class HistoryCommand:
             # avg_return = sum(return_pcts) / len(return_pcts) if return_pcts else s_decimal_0
             # report_data["average_return"] = f"{avg_return:.2%}" if return_pcts else "N/A"
 
-            with self.trade_fill_db.get_new_session() as session:
-                session.query()
-                unique_strategy_files = session.query(TradeFill.config_file_path).distinct().all()
-                unique_strategy_files = [row[0] for row in unique_strategy_files if row[0] is not None]
-
-            with self.trade_fill_db.get_new_session() as session:
-                result = session.execute(
-                    """
-                    SELECT DISTINCT config_file_path, market
-                    FROM "TradeFill"
-                    WHERE config_file_path IS NOT NULL;
-                    """
-                )
-
-                grouped_config_files = {}
-
-                for row in result.fetchall():
-                    exchange = row.market  # Exchange name
-                    config_file = row.config_file_path  # Config file path
-
-                    if exchange not in grouped_config_files:
-                        grouped_config_files[exchange] = []
-
-                    grouped_config_files[exchange].append(config_file)
-
-            with self.trade_fill_db.get_new_session() as session:
-                result = session.execute(
-                    """
-                    SELECT DISTINCT market
-                    FROM "TradeFill"
-                    WHERE market IS NOT NULL;
-                    """
-                )
-
-                unique_exchanges = [row.market for row in result.fetchall()]
-
-            if not unique_strategy_files or not unique_exchanges or not grouped_config_files:
-                return {"error": "No strategy config files found in trade history or no uniques exchanges or no grouped config files."}
-
-            report_data['unique_strategy_files'] = unique_strategy_files
-            report_data['unique_exchanges'] = unique_exchanges
-            report_data['config_files_by_exchange'] = grouped_config_files
+            # performance_data = self.get_performance_metrics_from_db_sync(symbol)
+            # report_data['markets'] = performance_data
+            #
+            # with self.trade_fill_db.get_new_session() as session:
+            #     session.query()
+            #     unique_strategy_files = session.query(TradeFill.config_file_path).distinct().all()
+            #     unique_strategy_files = [row[0] for row in unique_strategy_files if row[0] is not None]
+            #
+            # with self.trade_fill_db.get_new_session() as session:
+            #     result = session.execute(
+            #         """
+            #         SELECT DISTINCT config_file_path, market
+            #         FROM "TradeFill"
+            #         WHERE config_file_path IS NOT NULL;
+            #         """
+            #     )
+            #
+            #     grouped_config_files = {}
+            #
+            #     for row in result.fetchall():
+            #         exchange = row.market  # Exchange name
+            #         config_file = row.config_file_path  # Config file path
+            #
+            #         if exchange not in grouped_config_files:
+            #             grouped_config_files[exchange] = []
+            #
+            #         grouped_config_files[exchange].append(config_file)
+            #
+            # with self.trade_fill_db.get_new_session() as session:
+            #     result = session.execute(
+            #         """
+            #         SELECT DISTINCT market
+            #         FROM "TradeFill"
+            #         WHERE market IS NOT NULL;
+            #         """
+            #     )
+            #
+            #     unique_exchanges = [row.market for row in result.fetchall()]
+            #
+            # if not unique_strategy_files or not unique_exchanges or not grouped_config_files:
+            #     return {"error": "No strategy config files found in trade history or no uniques exchanges or no grouped config files."}
+            #
+            # report_data['unique_strategy_files'] = unique_strategy_files
+            # report_data['unique_exchanges'] = unique_exchanges
+            # report_data['config_files_by_exchange'] = grouped_config_files
 
             return report_data
         except Exception as e:
