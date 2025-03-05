@@ -15,6 +15,7 @@ from hummingbot.client.ui.interface_utils import format_df_for_printout
 from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.model.trade_fill import TradeFill
 from hummingbot.user.user_balances import UserBalances
+import traceback
 
 s_float_0 = float(0)
 s_decimal_0 = Decimal("0")
@@ -581,7 +582,11 @@ class HistoryCommand:
 
             return report_data
         except Exception as e:
-            return {"error": str(e), "traceback": str(e.with_traceback()), "line": e.__traceback__.tb_lineno}
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+                "line": e.__traceback__.tb_lineno
+            }
 
     def collect_performance_data(self,  # type: HummingbotApplication
             market: str,
