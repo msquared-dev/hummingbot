@@ -534,7 +534,7 @@ class HistoryCommand:
             # avg_return = sum(return_pcts) / len(return_pcts) if return_pcts else s_decimal_0
             # report_data["average_return"] = f"{avg_return:.2%}" if return_pcts else "N/A"
 
-            performance_data = self.get_performance_metrics_from_db_sync(symbol)
+            performance_data = self.get_performance_metrics_from_db_sync()
             report_data['markets'] = performance_data
 
             with self.trade_fill_db.get_new_session() as session:
