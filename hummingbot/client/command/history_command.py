@@ -544,7 +544,7 @@ class HistoryCommand:
                     """
                     SELECT DISTINCT config_file_path, market
                     FROM "TradeFill"
-                    WHERE config_file_path IS NOT NULL
+                    WHERE config_file_path IS NOT NULL;
                     """
                 )
 
@@ -564,7 +564,7 @@ class HistoryCommand:
                     """
                     SELECT DISTINCT market
                     FROM "TradeFill"
-                    WHERE market IS NOT NULL
+                    WHERE market IS NOT NULL;
                     """
                 )
 
