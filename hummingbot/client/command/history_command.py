@@ -112,7 +112,8 @@ class HistoryCommand:
                 await UserBalances.instance().update_exchange_balance(market, self.client_config_map)
                 return UserBalances.instance().all_balances(market)
 
-    def get_current_balances_from_db_sync(self, symbol: str, config_file_path: str) -> dict:
+    def get_current_balances_from_db_sync(self,   # type: HummingbotApplication
+                                          symbol: str, config_file_path: str) -> dict:
         with self.trade_fill_db.get_new_session() as session:
             result = session.execute(
                 """
@@ -141,7 +142,9 @@ class HistoryCommand:
             cur_balances = {}
         return cur_balances
 
-    def get_performance_metrics_from_db_sync(self) -> List[dict]:
+    # def get_performance_metrics_from_db_sync(self) -> List[dict]:
+    def get_performance_metrics_from_db_sync(self,  # type: HummingbotApplication
+                                             ) -> List[dict]:
         with self.trade_fill_db.get_new_session() as session:
             result = session.execute(
                 """
@@ -180,15 +183,13 @@ class HistoryCommand:
                         -- Sum of flat fees in either base or quote currency
                         SUM(
                             CASE 
-                                WHEN trade_fee::jsonb ? 'flat_fees' -- Check if 'flat_fees' exists
+                                WHEN trade_fee::jsonb->'flat_fees' IS NOT NULL  -- Ensure flat_fees exists
                                 THEN (
                                     SELECT SUM(
                                         CASE 
-                                            WHEN flat_fee->>'token' = 'USDT' -- Quote Currency (USDT in this example)
-                                            THEN (flat_fee->>'amount')::numeric -- Already in quote currency
-                                            WHEN flat_fee->>'token' != 'USDT' -- Base Currency (Example Token)
-                                            THEN (flat_fee->>'amount')::numeric * price::numeric -- Convert base to quote currency
-                                            ELSE 0 
+                                            WHEN flat_fee->>'token' = 'USDT' -- Quote Currency
+                                            THEN (flat_fee->>'amount')::numeric 
+                                            ELSE (flat_fee->>'amount')::numeric * price::numeric -- Convert base to quote
                                         END
                                     )
                                     FROM jsonb_array_elements(trade_fee::jsonb -> 'flat_fees') AS flat_fee
@@ -532,51 +533,51 @@ class HistoryCommand:
             # avg_return = sum(return_pcts) / len(return_pcts) if return_pcts else s_decimal_0
             # report_data["average_return"] = f"{avg_return:.2%}" if return_pcts else "N/A"
 
-            # performance_data = self.get_performance_metrics_from_db_sync(symbol)
-            # report_data['markets'] = performance_data
-            #
-            # with self.trade_fill_db.get_new_session() as session:
-            #     session.query()
-            #     unique_strategy_files = session.query(TradeFill.config_file_path).distinct().all()
-            #     unique_strategy_files = [row[0] for row in unique_strategy_files if row[0] is not None]
-            #
-            # with self.trade_fill_db.get_new_session() as session:
-            #     result = session.execute(
-            #         """
-            #         SELECT DISTINCT config_file_path, market
-            #         FROM "TradeFill"
-            #         WHERE config_file_path IS NOT NULL;
-            #         """
-            #     )
-            #
-            #     grouped_config_files = {}
-            #
-            #     for row in result.fetchall():
-            #         exchange = row.market  # Exchange name
-            #         config_file = row.config_file_path  # Config file path
-            #
-            #         if exchange not in grouped_config_files:
-            #             grouped_config_files[exchange] = []
-            #
-            #         grouped_config_files[exchange].append(config_file)
-            #
-            # with self.trade_fill_db.get_new_session() as session:
-            #     result = session.execute(
-            #         """
-            #         SELECT DISTINCT market
-            #         FROM "TradeFill"
-            #         WHERE market IS NOT NULL;
-            #         """
-            #     )
-            #
-            #     unique_exchanges = [row.market for row in result.fetchall()]
-            #
-            # if not unique_strategy_files or not unique_exchanges or not grouped_config_files:
-            #     return {"error": "No strategy config files found in trade history or no uniques exchanges or no grouped config files."}
-            #
-            # report_data['unique_strategy_files'] = unique_strategy_files
-            # report_data['unique_exchanges'] = unique_exchanges
-            # report_data['config_files_by_exchange'] = grouped_config_files
+            performance_data = self.get_performance_metrics_from_db_sync(symbol)
+            report_data['markets'] = performance_data
+
+            with self.trade_fill_db.get_new_session() as session:
+                session.query()
+                unique_strategy_files = session.query(TradeFill.config_file_path).distinct().all()
+                unique_strategy_files = [row[0] for row in unique_strategy_files if row[0] is not None]
+
+            with self.trade_fill_db.get_new_session() as session:
+                result = session.execute(
+                    """
+                    SELECT DISTINCT config_file_path, market
+                    FROM "TradeFill"
+                    WHERE config_file_path IS NOT NULL;
+                    """
+                )
+
+                grouped_config_files = {}
+
+                for row in result.fetchall():
+                    exchange = row.market  # Exchange name
+                    config_file = row.config_file_path  # Config file path
+
+                    if exchange not in grouped_config_files:
+                        grouped_config_files[exchange] = []
+
+                    grouped_config_files[exchange].append(config_file)
+
+            with self.trade_fill_db.get_new_session() as session:
+                result = session.execute(
+                    """
+                    SELECT DISTINCT market
+                    FROM "TradeFill"
+                    WHERE market IS NOT NULL;
+                    """
+                )
+
+                unique_exchanges = [row.market for row in result.fetchall()]
+
+            if not unique_strategy_files or not unique_exchanges or not grouped_config_files:
+                return {"error": "No strategy config files found in trade history or no uniques exchanges or no grouped config files."}
+
+            report_data['unique_strategy_files'] = unique_strategy_files
+            report_data['unique_exchanges'] = unique_exchanges
+            report_data['config_files_by_exchange'] = grouped_config_files
 
             return report_data
         except Exception as e:
