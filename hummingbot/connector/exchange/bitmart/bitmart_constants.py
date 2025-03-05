@@ -21,13 +21,13 @@ PRIVATE_ORDER_PROGRESS_CHANNEL_NAME = "spot/user/order"
 # REST API ENDPOINTS
 CHECK_NETWORK_PATH_URL = "system/service"
 GET_TRADING_RULES_PATH_URL = "spot/v1/symbols/details"
-GET_LAST_TRADING_PRICES_PATH_URL = "spot/v1/ticker"
-GET_ORDER_BOOK_PATH_URL = "spot/v1/symbols/book"
-CREATE_ORDER_PATH_URL = "spot/v1/submit_order"
+GET_LAST_TRADING_PRICES_PATH_URL = "/spot/quotation/v3/tickers"
+GET_ORDER_BOOK_PATH_URL = "/spot/quotation/v3/books"
+CREATE_ORDER_PATH_URL = "spot/v2/submit_order" # changed
 CANCEL_ORDER_PATH_URL = "spot/v2/cancel_order"
-GET_ACCOUNT_SUMMARY_PATH_URL = "spot/v1/wallet"
-GET_ORDER_DETAIL_PATH_URL = "spot/v2/order_detail"
-GET_TRADE_DETAIL_PATH_URL = "spot/v1/trades"
+GET_ACCOUNT_SUMMARY_PATH_URL = "spot/v1/wallet" # changed
+GET_ORDER_DETAIL_PATH_URL = "spot/v2/order_detail" #changed
+GET_TRADE_DETAIL_PATH_URL = "spot/v1/trades"  #changed
 SERVER_TIME_PATH = "system/time"
 
 # WS API ENDPOINTS
