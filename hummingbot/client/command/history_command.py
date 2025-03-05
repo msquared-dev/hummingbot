@@ -141,6 +141,176 @@ class HistoryCommand:
             cur_balances = {}
         return cur_balances
 
+    def get_performance_metrics_from_db_sync(self) -> list:
+        with self.trade_fill_db.get_new_session() as session:
+            result = session.execute(
+                """
+                WITH latest_balances AS (
+                    SELECT DISTINCT ON (bot)
+                        bot,
+                        total_currency AS current_quote_balance,
+                        total_token AS current_base_balance,
+                        created_at
+                    FROM bots_backend_statisticslogmodel
+                    ORDER BY bot, created_at DESC
+                ),
+                start_balances AS (
+                    SELECT DISTINCT ON (bot)
+                        bot,
+                        total_currency AS start_quote_balance,
+                        total_token AS start_base_balance,
+                        created_at
+                    FROM bots_backend_statisticslogmodel
+                    ORDER BY bot, created_at ASC
+                ),
+                fees_agg AS (
+                    SELECT 
+                        config_file_path,
+
+                        -- Sum of percentage-based fees in the quote currency
+                        SUM(
+                            CASE 
+                                WHEN trade_fee->>'percent' IS NOT NULL 
+                                THEN price::numeric * amount::numeric * (trade_fee->>'percent')::numeric 
+                                ELSE 0 
+                            END
+                        ) AS percent_fee_in_quote,
+
+                        -- Sum of flat fees in either base or quote currency
+                        SUM(
+                            CASE 
+                                WHEN jsonb_array_length(trade_fee->'flat_fees'::jsonb) > 0 
+                                THEN (
+                                    SELECT SUM(
+                                        CASE 
+                                            WHEN flat_fee->>'token' = 'PROPC' 
+                                            THEN (flat_fee->>'amount')::numeric * price::numeric -- Convert to quote currency
+                                            WHEN flat_fee->>'token' = 'USDT' 
+                                            THEN (flat_fee->>'amount')::numeric -- Already in quote currency
+                                            ELSE 0 
+                                        END
+                                    )
+                                    FROM jsonb_array_elements(trade_fee->'flat_fees'::jsonb) AS flat_fee
+                                ) 
+                                ELSE 0 
+                            END
+                        ) AS flat_fee_in_quote
+                    FROM "TradeFill"
+                    GROUP BY config_file_path
+                )
+                SELECT
+                    tf.config_file_path,
+                    COUNT(*) AS total_trades,
+                    COUNT(*) FILTER (WHERE LOWER(tf.trade_type) = 'buy') AS buy_trades,
+                    COUNT(*) FILTER (WHERE LOWER(tf.trade_type) = 'sell') AS sell_trades,
+
+                    -- Trade Volumes
+                    SUM(CASE WHEN LOWER(tf.trade_type) = 'buy' THEN tf.amount ELSE 0 END) AS buy_volume_base,
+                    SUM(CASE WHEN LOWER(tf.trade_type) = 'sell' THEN tf.amount ELSE 0 END) AS sell_volume_base,
+                    SUM(tf.amount) AS total_volume_base,
+
+                    SUM(CASE WHEN LOWER(tf.trade_type) = 'buy' THEN tf.price * tf.amount ELSE 0 END) AS buy_volume_quote,
+                    SUM(CASE WHEN LOWER(tf.trade_type) = 'sell' THEN tf.price * tf.amount ELSE 0 END) AS sell_volume_quote,
+                    SUM(tf.price * tf.amount) AS total_volume_quote,
+
+                    -- Average Prices
+                    AVG(CASE WHEN LOWER(tf.trade_type) = 'buy' THEN tf.price ELSE NULL END) AS avg_buy_price,
+                    AVG(CASE WHEN LOWER(tf.trade_type) = 'sell' THEN tf.price ELSE NULL END) AS avg_sell_price,
+                    AVG(tf.price) AS avg_total_price,
+
+                    -- Balances
+                    sb.start_base_balance,
+                    sb.start_quote_balance,
+                    lb.current_base_balance,
+                    lb.current_quote_balance,
+
+                    -- Portfolio Values
+                    (sb.start_base_balance * AVG(tf.price) + sb.start_quote_balance) AS hold_portfolio_value,
+                    (lb.current_base_balance * AVG(tf.price) + lb.current_quote_balance) AS current_portfolio_value,
+
+                    -- Profit and Loss
+                    ((lb.current_base_balance * AVG(tf.price) + lb.current_quote_balance) - 
+                     (sb.start_base_balance * AVG(tf.price) + sb.start_quote_balance)) AS trade_pnl,
+
+                    -- Fees (Sum of Percentage + Flat Fees)
+                    (fa.percent_fee_in_quote + fa.flat_fee_in_quote) AS fee_in_quote,
+
+                    -- Adjusted PnL
+                    (((lb.current_base_balance * AVG(tf.price) + lb.current_quote_balance) - 
+                     (sb.start_base_balance * AVG(tf.price) + sb.start_quote_balance)) - 
+                     (fa.percent_fee_in_quote + fa.flat_fee_in_quote)) AS total_pnl,
+
+                    -- Return Percentage
+                    CASE 
+                        WHEN (sb.start_base_balance * AVG(tf.price) + sb.start_quote_balance) <> 0 
+                        THEN (((lb.current_base_balance * AVG(tf.price) + lb.current_quote_balance) - 
+                               (sb.start_base_balance * AVG(tf.price) + sb.start_quote_balance)) - 
+                               (fa.percent_fee_in_quote + fa.flat_fee_in_quote))
+                             / (sb.start_base_balance * AVG(tf.price) + sb.start_quote_balance)
+                        ELSE NULL 
+                    END AS return_percentage,
+
+                    tf.market
+
+                FROM "TradeFill" tf
+                LEFT JOIN latest_balances lb ON lb.bot = tf.config_file_path
+                LEFT JOIN start_balances sb ON sb.bot = tf.config_file_path
+                LEFT JOIN fees_agg fa ON fa.config_file_path = tf.config_file_path
+                GROUP BY tf.config_file_path, lb.current_base_balance, lb.current_quote_balance, 
+                         sb.start_base_balance, sb.start_quote_balance, tf.market, 
+                         fa.percent_fee_in_quote, fa.flat_fee_in_quote;
+                """
+            )
+
+            rows = result.fetchall()
+            performance_metrics = []
+
+            for row in rows:
+                performance_metrics.append({
+                    row.config_file_path: {
+                        "config_file_path": row.config_file_path,
+                        "number_of_trades": {
+                            "buy": row.buy_trades,
+                            "sell": row.sell_trades,
+                            "total": row.total_trades
+                        },
+                        "total_trade_volume": {
+                            "base": {
+                                "buy": str(row.buy_volume_base),
+                                "sell": str(row.sell_volume_base),
+                                "total": str(row.total_volume_base)
+                            },
+                            "quote": {
+                                "buy": str(row.buy_volume_quote),
+                                "sell": str(row.sell_volume_quote),
+                                "total": str(row.total_volume_quote)
+                            }
+                        },
+                        "average_price": {
+                            "buy": str(row.avg_buy_price),
+                            "sell": str(row.avg_sell_price),
+                            "total": str(row.avg_total_price)
+                        },
+                        "balances": {
+                            "start_base_balance": str(row.start_base_balance),
+                            "start_quote_balance": str(row.start_quote_balance),
+                            "current_base_balance": str(row.current_base_balance),
+                            "current_quote_balance": str(row.current_quote_balance),
+                        },
+                        "performance": {
+                            "hold_portfolio_value": str(row.hold_portfolio_value),
+                            "current_portfolio_value": str(row.current_portfolio_value),
+                            "trade_pnl": str(row.trade_pnl),
+                            "fees_paid": str(row.fee_in_quote),
+                            "total_pnl": str(row.total_pnl),
+                            "return_percentage": f"{row.return_percentage:.2%}" if row.return_percentage else "N/A"
+                        },
+                        "market": row.market
+                    }
+                })
+
+            return performance_metrics
+
     def report_header(self,  # type: HummingbotApplication
             start_time: float):
         lines = []
@@ -346,28 +516,63 @@ class HistoryCommand:
             if not trades[0].config_file_path.endswith('.yml'):
                 use_db_balances = True
 
-        return_pcts = []
-        for market, config_file_path, symbol in market_info:
-            cur_trades = [t for t in trades if t.market == market and t.config_file_path == config_file_path]
-            cur_balances = self.get_current_balances_from_db_sync(symbol, trades[0].config_file_path)
-            perf = await PerformanceMetrics.create(symbol, cur_trades, cur_balances)
-            market_report = self.collect_performance_data(market, symbol, perf, precision)
-            report_data["markets"][config_file_path] = market_report
-
-            return_pcts.append(perf.return_pct)
-
-        avg_return = sum(return_pcts) / len(return_pcts) if return_pcts else s_decimal_0
-        report_data["average_return"] = f"{avg_return:.2%}" if return_pcts else "N/A"
+        performance_data = self.get_performance_metrics_from_db_sync()
+        report_data['markets'] = performance_data
+        # return_pcts = []
+        # for market, config_file_path, symbol in market_info:
+        #     cur_trades = [t for t in trades if t.market == market and t.config_file_path == config_file_path]
+        #     cur_balances = self.get_current_balances_from_db_sync(symbol, trades[0].config_file_path)
+        #     perf = await PerformanceMetrics.create(symbol, cur_trades, cur_balances)
+        #     market_report = self.collect_performance_data(market, symbol, perf, precision)
+        #     report_data["markets"][config_file_path] = market_report
+        #
+        #     return_pcts.append(perf.return_pct)
+        #
+        # avg_return = sum(return_pcts) / len(return_pcts) if return_pcts else s_decimal_0
+        # report_data["average_return"] = f"{avg_return:.2%}" if return_pcts else "N/A"
 
         with self.trade_fill_db.get_new_session() as session:
             session.query()
             unique_strategy_files = session.query(TradeFill.config_file_path).distinct().all()
             unique_strategy_files = [row[0] for row in unique_strategy_files if row[0] is not None]
 
-        if not unique_strategy_files:
-            return {"error": "No strategy config files found in trade history."}
+        with self.trade_fill_db.get_new_session() as session:
+            result = session.execute(
+                """
+                SELECT DISTINCT config_file_path, market
+                FROM "TradeFill"
+                WHERE config_file_path IS NOT NULL
+                """
+            )
+
+            grouped_config_files = {}
+
+            for row in result.fetchall():
+                exchange = row.market  # Exchange name
+                config_file = row.config_file_path  # Config file path
+
+                if exchange not in grouped_config_files:
+                    grouped_config_files[exchange] = []
+
+                grouped_config_files[exchange].append(config_file)
+
+        with self.trade_fill_db.get_new_session() as session:
+            result = session.execute(
+                """
+                SELECT DISTINCT market
+                FROM "TradeFill"
+                WHERE market IS NOT NULL
+                """
+            )
+
+            unique_exchanges = [row.market for row in result.fetchall()]
+
+        if not unique_strategy_files or not unique_exchanges or not grouped_config_files:
+            return {"error": "No strategy config files found in trade history or no uniques exchanges or no grouped config files."}
 
         report_data['unique_strategy_files'] = unique_strategy_files
+        report_data['unique_exchanges'] = unique_exchanges
+        report_data['config_files_by_exchange'] = grouped_config_files
 
         return report_data
 
