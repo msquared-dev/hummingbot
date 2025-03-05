@@ -229,7 +229,7 @@ class MexcExchange(ExchangePyBase):
 
         status = cancel_result.get("status")
 
-        if status in ["CANCELED", "FILLED", "PARTIALLY_CANCELED"]:
+        if status in ["CANCELED", "FILLED", "PARTIALLY_CANCELED", "PARTIALLY_FILLED"]:
             self.logger().info(f"Cancel order {order_id} result: {cancel_result} True")
             return True
         self.logger().info(f"Cancel order {order_id} result: {cancel_result} False")
@@ -271,6 +271,15 @@ class MexcExchange(ExchangePyBase):
 
             except Exception:
                 self.logger().exception(f"Error parsing the trading pair rule {rule}. Skipping.")
+        retval.append(
+            TradingRule(
+                trading_pair="ALVA-USDT",
+                min_order_size=Decimal("0.01"),
+                min_price_increment=Decimal("0.0001"),
+                min_base_amount_increment=Decimal("0.01"),
+                min_notional_size=Decimal("1")
+            )
+        )
         return retval
 
     async def _status_polling_loop_fetch_updates(self):
@@ -583,6 +592,8 @@ class MexcExchange(ExchangePyBase):
                 base=symbol_data["baseAsset"],
                 quote=symbol_data["quoteAsset"]
                 )
+
+        mapping["ALVAUSDT"] = "ALVA-USDT"
         self._set_trading_pair_symbol_map(mapping)
 
     async def _get_last_traded_price(self, trading_pair: str) -> float:

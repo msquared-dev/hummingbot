@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import json
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -67,8 +68,8 @@ class BitmartAPIOrderBookDataSource(OrderBookTrackerDataSource):
     async def _order_book_snapshot(self, trading_pair: str) -> OrderBookMessage:
         snapshot_response: Dict[str, Any] = await self._request_order_book_snapshot(trading_pair)
         snapshot_data: Dict[str, Any] = snapshot_response["data"]
-        snapshot_timestamp: float = int(snapshot_data["timestamp"]) * 1e-3
-        update_id: int = int(snapshot_data["timestamp"])
+        snapshot_timestamp: float = int(datetime.datetime.timestamp()) * 1e-3
+        update_id: int = int(datetime.datetime.timestamp())
 
         order_book_message_content = {
             "trading_pair": trading_pair,
