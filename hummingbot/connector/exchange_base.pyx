@@ -69,7 +69,8 @@ cdef class ExchangeBase(ConnectorBase):
 
         if "ALVAUSDT" not in current_map:
             current_map["ALVAUSDT"] = "ALVA-USDT"
-
+        if "ANTTUSDT" not in current_map:
+            current_map["ANTTUSDT"] = "ANTT-USDT"
         return current_map
 
     def trading_pair_symbol_map_ready(self):

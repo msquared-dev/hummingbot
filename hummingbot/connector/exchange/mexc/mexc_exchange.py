@@ -280,6 +280,16 @@ class MexcExchange(ExchangePyBase):
                 min_notional_size=Decimal("1")
             )
         )
+        retval.append(
+            TradingRule(
+                trading_pair="ANTT-USDT",
+                min_order_size=Decimal("0.01"),
+                min_price_increment=Decimal("0.0001"),
+                min_base_amount_increment=Decimal("0.01"),
+                min_notional_size=Decimal("1")
+            )
+        )
+
         return retval
 
     async def _status_polling_loop_fetch_updates(self):
@@ -594,6 +604,7 @@ class MexcExchange(ExchangePyBase):
                 )
 
         mapping["ALVAUSDT"] = "ALVA-USDT"
+        mapping["ANTTUSDT"] = "ANTT-USDT"
         self._set_trading_pair_symbol_map(mapping)
 
     async def _get_last_traded_price(self, trading_pair: str) -> float:
