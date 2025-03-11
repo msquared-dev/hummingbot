@@ -30,10 +30,10 @@ def get_timestamp(days_ago: float = 0.) -> float:
 
 class HistoryCommand:
     def history(self,  # type: HummingbotApplication
-            days: float = 0,
-            verbose: bool = False,
-            precision: Optional[int] = None
-    ):
+                days: float = 0,
+                verbose: bool = False,
+                precision: Optional[int] = None
+                ):
         if threading.current_thread() != threading.main_thread():
             self.ev_loop.call_soon_threadsafe(self.history, days, verbose, precision)
             return
@@ -56,7 +56,7 @@ class HistoryCommand:
             safe_ensure_future(self.history_report(start_time, trades, precision))
 
     def get_history_trades_json(self,  # type: HummingbotApplication
-            days: float = 0):
+                                days: float = 0):
         if self.strategy_file_name is None:
             return
         start_time = get_timestamp(days) if days > 0 else self.init_time
@@ -69,10 +69,10 @@ class HistoryCommand:
             return list([TradeFill.to_bounty_api_json(t) for t in trades])
 
     async def history_report(self,  # type: HummingbotApplication
-            start_time: float,
-            trades: List[TradeFill],
-            precision: Optional[int] = None,
-            display_report: bool = True) -> Decimal:
+                             start_time: float,
+                             trades: List[TradeFill],
+                             precision: Optional[int] = None,
+                             display_report: bool = True) -> Decimal:
         market_info: Set[Tuple[str, str]] = set((t.market, t.symbol) for t in trades)
         if display_report:
             self.report_header(start_time)
@@ -97,7 +97,7 @@ class HistoryCommand:
         return avg_return
 
     async def get_current_balances(self,  # type: HummingbotApplication
-            market: str):
+                                   market: str):
         if market in self.markets and self.markets[market].ready:
             return self.markets[market].get_all_balances()
         elif "Paper" in market:
@@ -113,7 +113,7 @@ class HistoryCommand:
                 await UserBalances.instance().update_exchange_balance(market, self.client_config_map)
                 return UserBalances.instance().all_balances(market)
 
-    def get_current_balances_from_db_sync(self,   # type: HummingbotApplication
+    def get_current_balances_from_db_sync(self,  # type: HummingbotApplication
                                           symbol: str, config_file_path: str) -> dict:
         with self.trade_fill_db.get_new_session() as session:
             result = session.execute(
@@ -143,6 +143,28 @@ class HistoryCommand:
             cur_balances = {}
         return cur_balances
 
+    def get_latest_trade_price_from_db_sync(self, symbol: str, config_file_path: str, market: str) -> Decimal:
+        with self.trade_fill_db.get_new_session() as session:
+            result = session.execute(
+                """
+                SELECT price
+                FROM "TradeFill"
+                WHERE market = :market AND symbol = :symbol AND config_file_path = :config_file_path
+                ORDER BY timestamp DESC
+                LIMIT 1
+                """,
+                {"market": market, "symbol": symbol, "config_file_path": config_file_path}
+            )
+            row = result.fetchone()
+
+        if row:
+            latest_price = Decimal(str(row[0]))
+        else:
+            self.notify(f"\nNo trade record found in DB for {config_file_path} {market} {symbol}.")
+            latest_price = Decimal('0')
+
+        return latest_price
+
     # def get_performance_metrics_from_db_sync(self) -> List[dict]:
     def get_performance_metrics_from_db_sync(self,  # type: HummingbotApplication
                                              ) -> List[dict]:
@@ -171,7 +193,7 @@ class HistoryCommand:
                     -- Aggregate both percentage-based and flat fees
                     SELECT 
                         config_file_path,
-                        
+
                         -- Sum of percentage-based fees in the quote currency
                         SUM(
                             CASE 
@@ -180,7 +202,7 @@ class HistoryCommand:
                                 ELSE 0 
                             END
                         ) AS percent_fee_in_quote,
-                        
+
                         -- Sum of flat fees in either base or quote currency
                         SUM(
                             CASE 
@@ -200,51 +222,71 @@ class HistoryCommand:
                         ) AS flat_fee_in_quote
                     FROM "TradeFill"
                     GROUP BY config_file_path
+                ),
+                latest_and_peak_prices AS (
+                    SELECT 
+                        config_file_path,
+
+                        -- Latest overall price (buy or sell)
+                        (SELECT price FROM "TradeFill" tf2
+                         WHERE tf2.config_file_path = tf.config_file_path
+                         ORDER BY timestamp DESC LIMIT 1) AS latest_price,
+
+                        -- Latest buy price
+                        (SELECT price FROM "TradeFill" tf2
+                         WHERE tf2.config_file_path = tf.config_file_path AND LOWER(trade_type) = 'buy'
+                         ORDER BY timestamp DESC LIMIT 1) AS latest_buy_price,
+
+                        -- Peak price overall
+                        MAX(price) AS peak_price
+
+                    FROM "TradeFill" tf
+                    GROUP BY config_file_path
                 )
                 SELECT
                     tf.config_file_path,
-                    
+
                     -- Trades Counts
                     COUNT(*) AS total_trades,
                     COUNT(*) FILTER (WHERE LOWER(tf.trade_type) = 'buy') AS buy_trades,
                     COUNT(*) FILTER (WHERE LOWER(tf.trade_type) = 'sell') AS sell_trades,
-                
+
                     -- Trade Volumes
                     SUM(CASE WHEN LOWER(tf.trade_type) = 'buy' THEN tf.amount ELSE 0 END) AS buy_volume_base,
                     SUM(CASE WHEN LOWER(tf.trade_type) = 'sell' THEN tf.amount ELSE 0 END) AS sell_volume_base,
                     SUM(tf.amount) AS total_volume_base,
-                
+
                     SUM(CASE WHEN LOWER(tf.trade_type) = 'buy' THEN tf.price * tf.amount ELSE 0 END) AS buy_volume_quote,
                     SUM(CASE WHEN LOWER(tf.trade_type) = 'sell' THEN tf.price * tf.amount ELSE 0 END) AS sell_volume_quote,
                     SUM(tf.price * tf.amount) AS total_volume_quote,
-                
+
                     -- Average Prices
                     AVG(CASE WHEN LOWER(tf.trade_type) = 'buy' THEN tf.price ELSE NULL END) AS avg_buy_price,
                     AVG(CASE WHEN LOWER(tf.trade_type) = 'sell' THEN tf.price ELSE NULL END) AS avg_sell_price,
                     AVG(tf.price) AS avg_total_price,
-                
+
                     -- Balances
                     sb.start_base_balance,
                     sb.start_quote_balance,
                     lb.current_base_balance,
                     lb.current_quote_balance,
-                
+
                     -- Portfolio Value Calculations
                     (sb.start_base_balance * AVG(tf.price) + sb.start_quote_balance) AS hold_portfolio_value,
                     (lb.current_base_balance * AVG(tf.price) + lb.current_quote_balance) AS current_portfolio_value,
-                
+
                     -- Profit and Loss
                     ((lb.current_base_balance * AVG(tf.price) + lb.current_quote_balance) - 
                      (sb.start_base_balance * AVG(tf.price) + sb.start_quote_balance)) AS trade_pnl,
-                
+
                     -- Fees (Summed from percentage-based and flat fees)
                     (fa.percent_fee_in_quote + fa.flat_fee_in_quote) AS fee_in_quote,
-                
+
                     -- Adjusted PnL
                     (((lb.current_base_balance * AVG(tf.price) + lb.current_quote_balance) - 
                      (sb.start_base_balance * AVG(tf.price) + sb.start_quote_balance)) - 
                      (fa.percent_fee_in_quote + fa.flat_fee_in_quote)) AS total_pnl,
-                
+
                     -- Return Percentage
                     CASE 
                         WHEN (sb.start_base_balance * AVG(tf.price) + sb.start_quote_balance) <> 0 
@@ -254,13 +296,19 @@ class HistoryCommand:
                              / (sb.start_base_balance * AVG(tf.price) + sb.start_quote_balance)
                         ELSE NULL 
                     END AS return_percentage,
-                
+
+                    -- Latest and Peak Prices
+                    MAX(lp.latest_price) AS latest_price,
+                    MAX(lp.latest_buy_price) AS latest_buy_price,
+                    MAX(lp.peak_price) AS peak_price,
+
                     tf.market
-                
+
                 FROM "TradeFill" tf
                 LEFT JOIN latest_balances lb ON lb.bot = tf.config_file_path
                 LEFT JOIN start_balances sb ON sb.bot = tf.config_file_path
                 LEFT JOIN fees_agg fa ON fa.config_file_path = tf.config_file_path
+                LEFT JOIN latest_and_peak_prices lp ON lp.config_file_path = tf.config_file_path
                 GROUP BY tf.config_file_path, lb.current_base_balance, lb.current_quote_balance, sb.start_base_balance, sb.start_quote_balance, tf.market, fa.percent_fee_in_quote, fa.flat_fee_in_quote;
                 """
             )
@@ -308,6 +356,36 @@ class HistoryCommand:
                             "total_pnl": str(row.total_pnl),
                             "return_percentage": f"{row.return_percentage:.2%}" if row.return_percentage else "N/A"
                         },
+                        "accumulation_distribution": {
+                            "total_holdings": str(row.buy_volume_base - row.sell_volume_base),
+                            "total_usdt_spent": str(row.buy_volume_quote),
+                            "total_usdt_received": str(row.sell_volume_quote),
+                            # Average Cost Basis = Total USDT Spent / Total Holdings
+                            "average_cost_basis": str(
+                                row.buy_volume_quote / (row.buy_volume_base - row.sell_volume_base))
+                        },
+                        "profit_performance": {
+                            # (Current Price - Avg Cost Basis) * Total Holdings
+                            "unrealized_pnl": str((row.latest_price - (
+                                        row.buy_volume_quote / (row.buy_volume_base - row.sell_volume_base))) * (
+                                                              row.buy_volume_base - row.sell_volume_base)),
+                            # SUM(USDT Received) - SUM(USDT Spent)
+                            "realized_pnl": str(row.sell_volume_quote - row.buy_volume_quote),
+                            # Realized P&L + Unrealized P&L
+                            "total_pnl": str(
+                                row.current_portfolio_value - row.hold_portfolio_value + row.sell_volume_quote - row.buy_volume_quote),
+                            # average_price.sell - average_price.buy
+                            "effective_sell_buy_price": str(row.avg_sell_price - row.avg_buy_price),
+                        },
+                        "capital_recycling": {
+                            # USDT Available for Re-entry = Realized P&L + Remaining USDT
+                            "usdt_available_for_reentry": str(
+                                (row.sell_volume_quote - row.buy_volume_quote) + row.current_quote_balance),
+                            # Retracement Buy Trigger Price = (Peak Price + Previous Buy Price) / 2
+                            "retracement_buy_trigger_price": str((row.peak_price + row.latest_buy_price) / 2),
+                            "reinvestment_amount_per_cycle": str(
+                                (row.sell_volume_quote - row.buy_volume_quote) + row.current_quote_balance)
+                        },
                         "market": row.market
                     }
                 })
@@ -315,7 +393,7 @@ class HistoryCommand:
             return performance_metrics
 
     def report_header(self,  # type: HummingbotApplication
-            start_time: float):
+                      start_time: float):
         lines = []
         current_time = get_timestamp()
         lines.extend(
@@ -326,10 +404,10 @@ class HistoryCommand:
         self.notify("\n".join(lines))
 
     def report_performance_by_market(self,  # type: HummingbotApplication
-            market: str,
-            trading_pair: str,
-            perf: PerformanceMetrics,
-            precision: int):
+                                     market: str,
+                                     trading_pair: str,
+                                     perf: PerformanceMetrics,
+                                     precision: int):
         lines = []
         base, quote = trading_pair.split("-")
         lines.extend(
@@ -340,17 +418,17 @@ class HistoryCommand:
         trades_data = [
             [f"{'Number of trades':<27}", perf.num_buys, perf.num_sells, perf.num_trades],
             [f"{f'Total trade volume ({base})':<27}",
-                PerformanceMetrics.smart_round(perf.b_vol_base, precision),
-                PerformanceMetrics.smart_round(perf.s_vol_base, precision),
-                PerformanceMetrics.smart_round(perf.tot_vol_base, precision)],
+             PerformanceMetrics.smart_round(perf.b_vol_base, precision),
+             PerformanceMetrics.smart_round(perf.s_vol_base, precision),
+             PerformanceMetrics.smart_round(perf.tot_vol_base, precision)],
             [f"{f'Total trade volume ({quote})':<27}",
-                PerformanceMetrics.smart_round(perf.b_vol_quote, precision),
-                PerformanceMetrics.smart_round(perf.s_vol_quote, precision),
-                PerformanceMetrics.smart_round(perf.tot_vol_quote, precision)],
+             PerformanceMetrics.smart_round(perf.b_vol_quote, precision),
+             PerformanceMetrics.smart_round(perf.s_vol_quote, precision),
+             PerformanceMetrics.smart_round(perf.tot_vol_quote, precision)],
             [f"{'Avg price':<27}",
-                PerformanceMetrics.smart_round(perf.avg_b_price, precision),
-                PerformanceMetrics.smart_round(perf.avg_s_price, precision),
-                PerformanceMetrics.smart_round(perf.avg_tot_price, precision)],
+             PerformanceMetrics.smart_round(perf.avg_b_price, precision),
+             PerformanceMetrics.smart_round(perf.avg_s_price, precision),
+             PerformanceMetrics.smart_round(perf.avg_tot_price, precision)],
         ]
         trades_df: pd.DataFrame = pd.DataFrame(data=trades_data, columns=trades_columns)
         lines.extend(["", "  Trades:"] + ["    " + line for line in trades_df.to_string(index=False).split("\n")])
@@ -358,25 +436,25 @@ class HistoryCommand:
         assets_columns = ["", "start", "current", "change"]
         assets_data = [
             [f"{base:<17}", "-", "-",
-                "-"] if market in AllConnectorSettings.get_derivative_names() else  # No base asset for derivatives because they are margined
+             "-"] if market in AllConnectorSettings.get_derivative_names() else  # No base asset for derivatives because they are margined
             [f"{base:<17}",
-                PerformanceMetrics.smart_round(perf.start_base_bal, precision),
-                PerformanceMetrics.smart_round(perf.cur_base_bal, precision),
-                PerformanceMetrics.smart_round(perf.tot_vol_base, precision)],
+             PerformanceMetrics.smart_round(perf.start_base_bal, precision),
+             PerformanceMetrics.smart_round(perf.cur_base_bal, precision),
+             PerformanceMetrics.smart_round(perf.tot_vol_base, precision)],
             [f"{quote:<17}",
-                PerformanceMetrics.smart_round(perf.start_quote_bal, precision),
-                PerformanceMetrics.smart_round(perf.cur_quote_bal, precision),
-                PerformanceMetrics.smart_round(perf.tot_vol_quote, precision)],
+             PerformanceMetrics.smart_round(perf.start_quote_bal, precision),
+             PerformanceMetrics.smart_round(perf.cur_quote_bal, precision),
+             PerformanceMetrics.smart_round(perf.tot_vol_quote, precision)],
             [f"{trading_pair + ' price':<17}",
-                PerformanceMetrics.smart_round(perf.start_price),
-                PerformanceMetrics.smart_round(perf.cur_price),
-                PerformanceMetrics.smart_round(perf.cur_price - perf.start_price)],
+             PerformanceMetrics.smart_round(perf.start_price),
+             PerformanceMetrics.smart_round(perf.cur_price),
+             PerformanceMetrics.smart_round(perf.cur_price - perf.start_price)],
             [f"{'Base asset %':<17}", "-", "-",
-                "-"] if market in AllConnectorSettings.get_derivative_names() else  # No base asset for derivatives because they are margined
+             "-"] if market in AllConnectorSettings.get_derivative_names() else  # No base asset for derivatives because they are margined
             [f"{'Base asset %':<17}",
-                f"{perf.start_base_ratio_pct:.2%}",
-                f"{perf.cur_base_ratio_pct:.2%}",
-                f"{perf.cur_base_ratio_pct - perf.start_base_ratio_pct:.2%}"],
+             f"{perf.start_base_ratio_pct:.2%}",
+             f"{perf.cur_base_ratio_pct:.2%}",
+             f"{perf.cur_base_ratio_pct - perf.start_base_ratio_pct:.2%}"],
         ]
         assets_df: pd.DataFrame = pd.DataFrame(data=assets_data, columns=assets_columns)
         lines.extend(["", "  Assets:"] + ["    " + line for line in assets_df.to_string(index=False).split("\n")])
@@ -388,11 +466,11 @@ class HistoryCommand:
         ]
         perf_data.extend(
             ["Fees paid               ", f"{PerformanceMetrics.smart_round(fee_amount, precision)} {fee_token}"]
-                for fee_token, fee_amount in perf.fees.items()
+            for fee_token, fee_amount in perf.fees.items()
         )
         perf_data.extend(
             [["Total P&L               ", f"{PerformanceMetrics.smart_round(perf.total_pnl, precision)} {quote}"],
-                ["Return %                ", f"{perf.return_pct:.2%}"]]
+             ["Return %                ", f"{perf.return_pct:.2%}"]]
         )
         perf_df: pd.DataFrame = pd.DataFrame(data=perf_data)
         lines.extend(
@@ -403,7 +481,7 @@ class HistoryCommand:
         self.notify("\n".join(lines))
 
     async def calculate_profitability(self,  # type: HummingbotApplication
-    ) -> Decimal:
+                                      ) -> Decimal:
         """
         Determines the profitability of the trading bot.
         This function is used by the KillSwitch class.
@@ -426,7 +504,7 @@ class HistoryCommand:
         return avg_return
 
     def list_trades(self,  # type: HummingbotApplication
-            start_time: float):
+                    start_time: float):
         if threading.current_thread() != threading.main_thread():
             self.ev_loop.call_soon_threadsafe(self.list_trades, start_time)
             return
@@ -459,10 +537,10 @@ class HistoryCommand:
         self.notify("\n".join(lines))
 
     def full_report(self,  # type: HummingbotApplication
-            days: float = 0,
-            verbose: bool = False,
-            precision: Optional[int] = None
-    ):
+                    days: float = 0,
+                    verbose: bool = False,
+                    precision: Optional[int] = None
+                    ):
         """
         Generates a full performance report in JSON format.
 
@@ -487,14 +565,14 @@ class HistoryCommand:
         #     if not trades:
         #         return json.dumps({"error": "No past trades to report."}), []
 
-            # return asyncio.run(self.history_full_report(start_time, trades, precision, verbose, True))
+        # return asyncio.run(self.history_full_report(start_time, trades, precision, verbose, True))
 
     async def history_full_report(self,  # type: HummingbotApplication
-            start_time: float,
-            # trades: List[TradeFill],
-            precision: Optional[int] = None,
-            display_report: bool = False,
-            return_json: bool = True) -> dict[str, Any]:
+                                  start_time: float,
+                                  # trades: List[TradeFill],
+                                  precision: Optional[int] = None,
+                                  display_report: bool = False,
+                                  return_json: bool = True) -> dict[str, Any]:
         """
         Processes historical trade data and generates a performance report.
 
@@ -574,7 +652,8 @@ class HistoryCommand:
                 unique_exchanges = [row.market for row in result.fetchall()]
 
             if not unique_strategy_files or not unique_exchanges or not grouped_config_files:
-                return {"error": "No strategy config files found in trade history or no uniques exchanges or no grouped config files."}
+                return {
+                    "error": "No strategy config files found in trade history or no uniques exchanges or no grouped config files."}
 
             report_data['unique_strategy_files'] = unique_strategy_files
             report_data['unique_exchanges'] = unique_exchanges
@@ -589,10 +668,10 @@ class HistoryCommand:
             }
 
     def collect_performance_data(self,  # type: HummingbotApplication
-            market: str,
-            trading_pair: str,
-            perf: PerformanceMetrics,
-            precision: int) -> dict:
+                                 market: str,
+                                 trading_pair: str,
+                                 perf: PerformanceMetrics,
+                                 precision: int) -> dict:
         """
         Collects performance data for a given market and trading pair.
 
