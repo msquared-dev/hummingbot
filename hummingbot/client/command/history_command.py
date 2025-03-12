@@ -168,7 +168,7 @@ class HistoryCommand:
     # def get_performance_metrics_from_db_sync(self) -> List[dict]:
     def get_performance_metrics_from_db_sync(self,  # type: HummingbotApplication
                                              ) -> List[dict]:
-        with self.trade_fill_db.get_new_session() as session:
+        with (self.trade_fill_db.get_new_session() as session):
             result = session.execute(
                 """
                 WITH latest_balances AS (
@@ -317,6 +317,44 @@ class HistoryCommand:
             performance_metrics = []
 
             for row in rows:
+                try:
+                    unrealized_pnl =  str((row.latest_price - (row.buy_volume_quote / (row.buy_volume_base - row.sell_volume_base))) * (row.buy_volume_base - row.sell_volume_base))
+                except:
+                    unrealized_pnl = "0"
+
+                try:
+                    realized_pnl = str(row.sell_volume_quote - row.buy_volume_quote)
+                except:
+                    realized_pnl = "0"
+
+                try:
+                    total_pnl = str(Decimal(str(row.current_portfolio_value)) - Decimal(str(row.hold_portfolio_value)) + Decimal(str(row.sell_volume_quote)) - Decimal(str(row.buy_volume_quote)))
+                except:
+                    try:
+                        total_pnl = str(float(row.current_portfolio_value) - float(row.hold_portfolio_value) + float(row.sell_volume_quote) - float(row.buy_volume_quote))
+                    except:
+                        total_pnl = "0"
+
+                try:
+                    effective_sell_buy_price = str(row.avg_sell_price - row.avg_buy_price)
+                except:
+                    effective_sell_buy_price = "0"
+
+                try:
+                    usdt_available_for_reentry = str((Decimal(str(row.sell_volume_quote)) - Decimal(str(row.buy_volume_quote))) + Decimal(str(row.current_quote_balance)))
+                except:
+                    usdt_available_for_reentry = "0"
+
+                try:
+                    retracement_buy_trigger_price = str((Decimal(str(row.peak_price)) + Decimal(str(row.latest_buy_price))) / 2)
+                except:
+                    retracement_buy_trigger_price = "0"
+
+                try:
+                    reinvestment_amount_per_cycle = str((Decimal(str(row.sell_volume_quote)) - Decimal(str(row.buy_volume_quote))) + Decimal(str(row.current_quote_balance)))
+                except:
+                    reinvestment_amount_per_cycle = "0"
+
                 performance_metrics.append({
                     row.config_file_path: {
                         "config_file_path": row.config_file_path,
@@ -366,24 +404,20 @@ class HistoryCommand:
                         },
                         "profit_performance": {
                             # (Current Price - Avg Cost Basis) * Total Holdings
-                            "unrealized_pnl": str((row.latest_price - (
-                                        row.buy_volume_quote / (row.buy_volume_base - row.sell_volume_base))) * (
-                                                              row.buy_volume_base - row.sell_volume_base)),
+                            "unrealized_pnl": unrealized_pnl,
                             # SUM(USDT Received) - SUM(USDT Spent)
-                            "realized_pnl": str(row.sell_volume_quote - row.buy_volume_quote),
+                            "realized_pnl": realized_pnl,
                             # Realized P&L + Unrealized P&L
-                            "total_pnl": str(Decimal(str(row.current_portfolio_value)) - Decimal(str(row.hold_portfolio_value)) + Decimal(str(row.sell_volume_quote)) - Decimal(str(row.buy_volume_quote))),
+                            "total_pnl": total_pnl,
                             # average_price.sell - average_price.buy
-                            "effective_sell_buy_price": str(Decimal(str(row.avg_sell_price)) - Decimal(str(row.avg_buy_price))),
+                            "effective_sell_buy_price": effective_sell_buy_price
                         },
                         "capital_recycling": {
                             # USDT Available for Re-entry = Realized P&L + Remaining USDT
-                            "usdt_available_for_reentry": str(
-                                (Decimal(str(row.sell_volume_quote)) - Decimal(str(row.buy_volume_quote))) + Decimal(str(row.current_quote_balance))),
+                            "usdt_available_for_reentry": usdt_available_for_reentry,
                             # Retracement Buy Trigger Price = (Peak Price + Previous Buy Price) / 2
-                            "retracement_buy_trigger_price": str((Decimal(str(row.peak_price)) + Decimal(str(row.latest_buy_price))) / 2),
-                            "reinvestment_amount_per_cycle": str(
-                                (Decimal(str(row.sell_volume_quote)) - Decimal(str(row.buy_volume_quote))) + Decimal(str(row.current_quote_balance)))
+                            "retracement_buy_trigger_price": retracement_buy_trigger_price,
+                            "reinvestment_amount_per_cycle": reinvestment_amount_per_cycle
                         },
                         "market": row.market
                     }
