@@ -372,19 +372,18 @@ class HistoryCommand:
                             # SUM(USDT Received) - SUM(USDT Spent)
                             "realized_pnl": str(row.sell_volume_quote - row.buy_volume_quote),
                             # Realized P&L + Unrealized P&L
-                            "total_pnl": str(
-                                row.current_portfolio_value - row.hold_portfolio_value + row.sell_volume_quote - row.buy_volume_quote),
+                            "total_pnl": str(Decimal(str(row.current_portfolio_value)) - Decimal(str(row.hold_portfolio_value)) + Decimal(str(row.sell_volume_quote)) - Decimal(str(row.buy_volume_quote))),
                             # average_price.sell - average_price.buy
-                            "effective_sell_buy_price": str(row.avg_sell_price - row.avg_buy_price),
+                            "effective_sell_buy_price": str(Decimal(str(row.avg_sell_price)) - Decimal(str(row.avg_buy_price))),
                         },
                         "capital_recycling": {
                             # USDT Available for Re-entry = Realized P&L + Remaining USDT
                             "usdt_available_for_reentry": str(
-                                (row.sell_volume_quote - row.buy_volume_quote) + row.current_quote_balance),
+                                (Decimal(str(row.sell_volume_quote)) - Decimal(str(row.buy_volume_quote))) + Decimal(str(row.current_quote_balance))),
                             # Retracement Buy Trigger Price = (Peak Price + Previous Buy Price) / 2
-                            "retracement_buy_trigger_price": str((row.peak_price + row.latest_buy_price) / 2),
+                            "retracement_buy_trigger_price": str((Decimal(str(row.peak_price)) + Decimal(str(row.latest_buy_price))) / 2),
                             "reinvestment_amount_per_cycle": str(
-                                (row.sell_volume_quote - row.buy_volume_quote) + row.current_quote_balance)
+                                (Decimal(str(row.sell_volume_quote)) - Decimal(str(row.buy_volume_quote))) + Decimal(str(row.current_quote_balance)))
                         },
                         "market": row.market
                     }
